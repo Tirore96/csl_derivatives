@@ -124,11 +124,9 @@ match s with
 end.
 
 (*Expression*)
-Notation "s =~ c" := (matches c s) (at level 62).
+Notation "s =~ c" := (matches c s) (at level 63).
 
-(*Propositions*)
 
-Notation "s !=~ c" := (matches c s = false) (at level 62).
 
 (** Relation between [matches] and [derive]. *)
 Theorem derivation : forall (e:EventType)(s:Trace)(c:Contract),
@@ -136,9 +134,9 @@ Theorem derivation : forall (e:EventType)(s:Trace)(c:Contract),
 Proof. intros e s c. simpl. reflexivity.
 Qed.
 
-Reserved Notation "s ==~ re" (at level 60).
+Reserved Notation "s ==~ re" (at level 63).
 
-Inductive exp_match : Trace -> Contract -> Prop :=
+Inductive matches_comp : Trace -> Contract -> Prop :=
   | MSuccess : [] ==~ Success
   | MEvent x : [x] ==~ (Event x)
   | MSeq s1 c1 s2 c2
@@ -151,7 +149,7 @@ Inductive exp_match : Trace -> Contract -> Prop :=
   | MPlusR c1 s2 c2
                 (H2 : s2 ==~ c2)
               : s2 ==~ (c1 _+_ c2)
-  where "s ==~ c" := (exp_match s c).
+  where "s ==~ c" := (matches_comp s c).
 
 (* eq_event x x *)
 (*mseq at op level*)
@@ -210,10 +208,10 @@ intros s c H. induction H.
 - simpl. reflexivity. (*MSucces*)
 - simpl. rewrite eq_event_refl. reflexivity. (*MChar*)
 - apply mseq_oper. (*MSeq*)
-  * apply IHexp_match1.
-  * apply IHexp_match2.   
-- apply plus_left_oper. apply IHexp_match.  (*MPlusL*)
-- apply plus_right_oper. apply IHexp_match. (*MPlusR*)
+  * apply IHmatches_comp1.
+  * apply IHmatches_comp2.   
+- apply plus_left_oper. apply IHmatches_comp.  (*MPlusL*)
+- apply plus_right_oper. apply IHmatches_comp. (*MPlusR*)
 Qed.
 
 (*No trace can be derived from Failure*)
@@ -440,5 +438,172 @@ Proof. split.
   * inversion H2. apply MSeq. { apply MPlusL. apply H7. } { apply H8. }
   * inversion H1. apply MSeq. { apply MPlusR. apply H7. } { apply H8. }
 Qed.
+
+
+Inductive PContract : Set :=
+| PSuccess : PContract
+| PFailure : PContract
+| PEvent : EventType -> PContract
+| PPlus : PContract -> PContract -> PContract
+| PPar : PContract -> PContract -> PContract.
+
+Notation "e -.- c" := (PPar (PEvent e) c)
+                    (at level 41, right associativity).
+
+Notation "c0 -*- c1"  := (PPar c0 c1)
+                         (at level 50, left associativity).
+
+Notation "c0 -+- c1"  := (PPlus c0 c1)
+                         (at level 61, left associativity).
+
+
+Fixpoint pnu(p:PContract):bool :=
+match p with
+| PSuccess => true
+| PFailure => false
+| PEvent e => false
+| p0 -*- p1 => pnu p0 && pnu p1
+| p0 -+- p1 => pnu p0 || pnu p1
+end.
+
+
+
+Fixpoint pderive(e:EventType)(p:PContract): PContract :=
+match p with
+| PSuccess => PFailure
+| PFailure => PFailure
+| PEvent e1 => if eq_event e1 e then PSuccess else PFailure
+| p0 -*- p1 => (pderive e p0) -*- p1 -+- (p0 -*- (pderive e p1))
+| p0 -+- p1 => (pderive e p0) -+- (pderive e p1)
+end.
+
+
+Notation "c p/ e" := (pderive e c)(at level 62).
+
+Fixpoint pmatches (p:PContract)(s:Trace):bool :=
+match s with
+| [] => pnu p
+| e::s' => pmatches (p p/ e) s'
+end.
+
+(*Expression*)
+Notation "s p=~ c" := (pmatches c s) (at level 63).
+
+
+
+(** Relation between [matches] and [derive]. *)
+Theorem pderivation : forall (e:EventType)(s:Trace)(c:Contract),
+  (e::s) =~ c  = s =~ c / e.
+Proof. intros e s c. simpl. reflexivity.
+Qed.
+
+(*Taken from csl-formalization*)
+Inductive interleave : Trace -> Trace -> Trace -> Prop :=
+| IntLeftNil  : forall t, interleave nil t t
+| IntRightNil : forall t, interleave t nil t
+| IntLeftCons : forall t1 t2 t3 e, interleave t1 t2 t3 -> interleave (e :: t1) t2 (e :: t3)
+| IntRightCons : forall t1 t2 t3 e, interleave t1 t2 t3 -> interleave t1 (e :: t2) (e :: t3).
+
+
+Reserved Notation "s p==~ re" (at level 63).
+
+Inductive pmatches_comp : Trace -> PContract -> Prop :=
+  | MPSuccess : [] p==~ PSuccess
+  | MPEvent x : [x] p==~ (PEvent x)
+  | MPPar s1 c1 s2 c2 s
+             (H1 : s1 p==~ c1)
+             (H2 : s2 p==~ c2)
+             (H3 : interleave s1 s2 s)
+           : s p==~ (c1 -*- c2)
+  | MPPlusL s1 c1 c2
+                (H1 : s1 p==~ c1)
+              : s1 p==~ (c1 -+- c2)
+  | MPPlusR c1 s2 c2
+                (H2 : s2 p==~ c2)
+              : s2 p==~ (c1 -+- c2)
+  where "s p==~ c" := (pmatches_comp s c).
+
+Definition unfolded_contract := list ((Trace * (list PContract)))%type.
+
+
+(*How to show termination?*)
+Fixpoint times (c0 c1 : Contract) : Contract :=
+match c0,c1 with
+| Success, _ => c1
+| _, Success => c0
+| Failure, _ => Failure
+| _, Failure => Failure
+| _, _ => (times (c0 / Transfer) c1) _+_ (times c0 (c1 / Transfer))   _+_
+          (times (c0 / Notify) c1)   _+_ (times c0 (c1 / Notify)) 
+end.
+
+
+Fixpoint trans (p : PContract) : Contract :=
+match p with
+| PSuccess => Success
+| PFailure => Failure
+| PEvent e => Event e
+| p0 -*- p1 => unfold (trans p0) (trans p1)
+| p0 -+- p1 => (trans p0) _+_ (trans p1)
+end.
+
+
+
+n _;_ trans (p0 p/ Notify -*- p1 -+- p0 -*- p1)
+
+Lemma pmatches_matches : forall (s : Trace)(p : PContract),
+                              s p=~ p -> s =~ (trans p). 
+
+(*Lemma pfailure_false : 
+
+Lemma nil_pnu : forall (c : PContract), [] p==~ c -> pnu c = true.
+Proof. induction c. 
+- intro H. reflexivity.
+- intro H.  simpl in H.
+
+Lemma pcomp_imp_oper : forall (s : Trace)(c : PContract), s p==~ c  -> s p=~ c = true .
+Proof.
+intros s c H. inversion H.
+- simpl. reflexivity.
+- simpl. rewrite eq_event_refl. reflexivity.
+- inversion H3.
+  * induction s.
+    ** simpl. inversion H3. *)
+
+
+
+
+
+
+
+
+
+
+
+
+Fixpoint pcontract_to_contract (p : PContract) : Contract :=
+
+
+Lemma pmatches_comp_imp_matches : forall (s : Trace)(p : PContract), s p==~ p -> exists (c : Contract), s ==~ c.
+Proof.
+intros s p H. inversion H.
+- 
+
+Definition p_eq (p1 p2 : PContract) : Prop := forall s, s p==~ p1 <-> s p==~ p2.
+Notation "a =P= b" := (p_eq a b) (at level 70).
+
+Lemma distr_times : forall (p1 p2 PContract)(e : EventType),
+
+
+
+Definition sum_expand (p PContract) : PContarct :=
+match p with
+| p1 -*- p2 -> 
+| _ -> p
+end.
+  
+
+
+Lemma parallel_to_plus : forall (e : EventType)(p1 p2 : PContract), p1 -*- p2 =P= 
 
 
