@@ -533,8 +533,8 @@ match c0,c1 with
 | _, Success => c0
 | Failure, _ => Failure
 | _, Failure => Failure
-| _, _ => (times (c0 / Transfer) c1) _+_ (times c0 (c1 / Transfer))   _+_
-          (times (c0 / Notify) c1)   _+_ (times c0 (c1 / Notify)) 
+| _, _ => (times (c0 / Transfer) c1) _+_ (times (c1 / Transfer) c0 )   _+_
+          (times (c0 / Notify)   c1) _+_ (times (c1 / Notify)   c0 ) 
 end.
 
 
