@@ -1,8 +1,12 @@
 Require Import Lists.List.
 Require Import Bool.Bool.
+Require Import Program.
+Require Import Arith.PeanoNat.
+Require Import Structures.GenericMinMax.
 Import ListNotations.
 Require Export Setoid.
 Require Export Relation_Definitions.
+
 
 Inductive EventType : Type :=
 | Transfer : EventType
@@ -100,6 +104,11 @@ match c with
 | c0 _+_ c1 => nu c0 || nu c1
 end.
 
+Definition is_failure (c : Contract) :=
+match c with
+| Failure => true
+| _ => false
+end.
 
 (*Derivative of contract with respect to an event*)
 Fixpoint derive(e:EventType)(c:Contract):Contract :=
@@ -111,9 +120,12 @@ match c with
                | true => ((derive e c0) _;_ c1) _+_ (derive e c1)
                | false => (derive e c0) _;_ c1
                end
-| c0 _+_ c1 => (derive e c0) _+_ (derive e c1)
+| c0 _+_ c1 => let c0' := (derive e c0)  (*Expressed like this to ensure size decrease*)
+               in let c1' := (derive e c1) 
+                  in if (is_failure c0')
+                        then c1' 
+                        else c0' _+_ c1'
 end.
-
 
 Notation "c / e" := (derive e c).
 
@@ -151,21 +163,83 @@ Inductive matches_comp : Trace -> Contract -> Prop :=
               : s2 ==~ (c1 _+_ c2)
   where "s ==~ c" := (matches_comp s c).
 
-(* eq_event x x *)
-(*mseq at op level*)
+
+Lemma is_failure_failure : forall c0 : Contract, is_failure c0 = true -> c0 = Failure.
+Proof.
+intros c0 H. induction c0.
+- discriminate H.
+- reflexivity.
+- discriminate H.
+- discriminate H.
+- discriminate H.
+Qed.
+
+(*No trace can be derived from Failure*)
+Lemma failure_false : forall (s : Trace), (s =~ Failure) = false.
+Proof. induction s.
+- simpl. reflexivity.
+- simpl. apply IHs.
+Qed.
+
+Lemma remove_failure : forall (s : Trace)(c : Contract), s =~ (Failure _+_ c) = true -> s =~ c = true.
+Proof. induction s.
+- intros c H. simpl. simpl in H. apply H.
+- intros c H. simpl in H. simpl. apply H.
+Qed.
+
+Lemma add_failure : forall (s : Trace)(c : Contract), s =~ c = true -> s =~ (Failure _+_ c) = true .
+Proof. induction s.
+- intros c H. simpl. simpl in H. apply H.
+- intros c H. simpl. simpl in H. apply H. 
+Qed.
+
+(*Helper lemma reflecting change in derive function*)
+Lemma plus_if : forall (s : Trace)(c0 c1 : Contract), 
+s =~ (c0 _+_ c1) = true -> s =~ (if is_failure c0 then c1 else (c0 _+_ c1)) = true.
+Proof.
+intros s c0. generalize dependent s. induction c0.
+- intros s c1 H. simpl. apply H.
+- intros s c1 H. simpl. apply remove_failure in H. apply H.
+- intros s c1 H. simpl. apply H.
+- intros s c1 H. simpl. apply H.
+- intros s c1 H. simpl. apply H.
+Qed. 
+
+
+(*Helper lemma reflecting change in derive function*)
+Lemma if_plus : forall (s : Trace)(c0 c1 : Contract), 
+s =~ (if is_failure c0 then c1 else (c0 _+_ c1)) = true -> s =~ (c0 _+_ c1) = true.
+Proof.
+intros s c0. generalize dependent s. induction c0.
+- intros s c1 H. simpl in H. apply H.
+- intros s c1 H. simpl in H. apply add_failure. apply H.
+- intros s c1 H. simpl in H. apply H.
+- intros s c1 H. simpl in H. apply H.
+- intros s c1 H. simpl in H. apply H.
+Qed. 
+
+Lemma failure_or_not : forall (c : Contract), c = Failure \/ c <> Failure.
+Proof.
+induction c.
+- right. unfold not. intro H. discriminate.
+- left. reflexivity.
+- right. unfold not. intro H. discriminate.
+- right. unfold not. intro H. discriminate.
+- right. unfold not. intro H. discriminate.
+Qed.
 
 (*If s matches c, it also matches c _+_ any contract*)
 Lemma plus_left_oper : forall (s : Trace)(l r : Contract), s =~ l = true -> s =~ (l _+_ r) = true.
 Proof. intros s. induction s as [| n s' IHs'].
 - intros l r H. simpl in H. simpl. rewrite H. rewrite orb_true_l. reflexivity.
-- simpl. intros l r H. apply IHs'. apply H.
+- simpl. intros l r H. apply plus_if. apply IHs'. apply H.
 Qed. 
 
 (*_+_ is commutative*)
 Lemma plus_comm_oper : forall (s : Trace)(l r : Contract), s =~ (l _+_ r) = true -> s =~ (r _+_ l) = true.
 Proof. induction s as [| e s' IHs'].
 - simpl. intros l r H. rewrite orb_comm. apply H.
-- intros l r H. simpl. apply IHs'. simpl in H. apply H.
+- intros l r H. simpl. apply plus_if. apply IHs'. simpl in H. apply if_plus. apply H.
 Qed.
  
 (*If s matches c, it also matches any contract _+_ c*)
@@ -214,11 +288,12 @@ intros s c H. induction H.
 - apply plus_right_oper. apply IHmatches_comp. (*MPlusR*)
 Qed.
 
-(*No trace can be derived from Failure*)
-Lemma failure_false : forall (s : Trace), (s =~ Failure) = false.
+(*If s matches c1 _+_ c2, then it matches c1 or c2*)
+Lemma plus_or_oper : forall (s : Trace)(c1 c2 : Contract), (s =~ (c1 _+_ c2)) = true -> 
+               (s =~ c1) = true \/ (s =~ c2) = true.
 Proof. induction s.
-- simpl. reflexivity.
-- simpl. apply IHs.
+- intros c1 c2 H. simpl. simpl in H. apply orb_prop in H. apply H.
+- intros c1 c2 H. simpl. apply IHs. simpl in H. apply if_plus in H. apply H.
 Qed.
 
 (*Only the empty trace can be derived from Success*)
@@ -226,14 +301,6 @@ Lemma success_empty : forall (s : Trace), (s =~ Success) = true -> s = [].
 Proof. induction s.
 - intro H. reflexivity.
 - simpl. rewrite failure_false. intro H. discriminate.
-Qed.
-
-(*If s matches c1 _+_ c2, then it matches c1 or c2*)
-Lemma plus_or_oper : forall (s : Trace)(c1 c2 : Contract), (s =~ (c1 _+_ c2)) = true -> 
-               (s =~ c1) = true \/ (s =~ c2) = true.
-Proof. induction s.
-- intros c1 c2 H. simpl. simpl in H. apply orb_prop in H. apply H.
-- intros c1 c2 H. simpl. apply IHs. simpl in H. apply H.
 Qed.
 
 
@@ -456,47 +523,6 @@ Notation "c0 -*- c1"  := (PPar c0 c1)
 Notation "c0 -+- c1"  := (PPlus c0 c1)
                          (at level 61, left associativity).
 
-
-Fixpoint pnu(p:PContract):bool :=
-match p with
-| PSuccess => true
-| PFailure => false
-| PEvent e => false
-| p0 -*- p1 => pnu p0 && pnu p1
-| p0 -+- p1 => pnu p0 || pnu p1
-end.
-
-
-
-Fixpoint pderive(e:EventType)(p:PContract): PContract :=
-match p with
-| PSuccess => PFailure
-| PFailure => PFailure
-| PEvent e1 => if eq_event e1 e then PSuccess else PFailure
-| p0 -*- p1 => (pderive e p0) -*- p1 -+- (p0 -*- (pderive e p1))
-| p0 -+- p1 => (pderive e p0) -+- (pderive e p1)
-end.
-
-
-Notation "c p/ e" := (pderive e c)(at level 62).
-
-Fixpoint pmatches (p:PContract)(s:Trace):bool :=
-match s with
-| [] => pnu p
-| e::s' => pmatches (p p/ e) s'
-end.
-
-(*Expression*)
-Notation "s p=~ c" := (pmatches c s) (at level 63).
-
-
-
-(** Relation between [matches] and [derive]. *)
-Theorem pderivation : forall (e:EventType)(s:Trace)(c:Contract),
-  (e::s) =~ c  = s =~ c / e.
-Proof. intros e s c. simpl. reflexivity.
-Qed.
-
 (*Taken from csl-formalization*)
 Inductive interleave : Trace -> Trace -> Trace -> Prop :=
 | IntLeftNil  : forall t, interleave nil t t
@@ -523,19 +549,198 @@ Inductive pmatches_comp : Trace -> PContract -> Prop :=
               : s2 p==~ (c1 -+- c2)
   where "s p==~ c" := (pmatches_comp s c).
 
-Definition unfolded_contract := list ((Trace * (list PContract)))%type.
 
-
-(*How to show termination?*)
-Fixpoint times (c0 c1 : Contract) : Contract :=
-match c0,c1 with
-| Success, _ => c1
-| _, Success => c0
-| Failure, _ => Failure
-| _, Failure => Failure
-| _, _ => (times (c0 / Transfer) c1) _+_ (times (c1 / Transfer) c0 )   _+_
-          (times (c0 / Notify)   c1) _+_ (times (c1 / Notify)   c0 ) 
+Fixpoint con_size (c:Contract):nat :=
+match c with
+| Success => 2
+| Failure => 1
+| Event e => 3
+| c0 _;_ c1 => (con_size c0) + (con_size c1)
+| c0 _+_ c1 => max (con_size c0) (con_size c1)
 end.
+
+(*Lemma times_termination : forall (c : Contract)(e : EventType), (Failure <> normalize_plus c) ->
+  con_size (normalize_plus (c / e)) < con_size c.
+Proof. induction c.
+- intros e H. intuition.
+- intros e H. intuition.
+- intros e' H. simpl. destruct (eq_event e e'). { intuition. } { intuition. }
+- intros e H. simpl. destruct (is_failure (c1 / e)) eqn:Heqn.
+  * apply Nat.max_case_strong.
+    ** apply is_failure_failure in Heqn. Abort.*)
+
+Inductive reducible : Contract -> Prop :=
+| RSuccess : reducible Success
+| REvent x : reducible (Event x)
+| RPlusL c0 c1 
+            (H : reducible c0)
+           : reducible (c0 _+_ c1)
+| RPlusR c0 c1 
+            (H : reducible c1)
+           : reducible (c0 _+_ c1)
+| RPlusLF c : reducible (Failure _+_ c)
+| RPlusRF c : reducible (c _+_ Failure)
+| RSeq c0 c1 : reducible (c0 _;_ c1).
+
+Lemma reducible_size : forall (c : Contract), reducible c -> con_size c > con_size Failure.
+Proof. Admitted.
+
+Lemma size_reducible : forall (c : Contract), con_size c > con_size Failure -> reducible c.
+Proof. Admitted.
+
+(*Fixpoint plus_normalization c :=
+match c with
+| Success => Success
+| Failure => Failure
+| Event e => Event e
+| Failure _+_ c1 => c1
+| c0 _+_ c1 => (plus_normalization c0) _+_ (plus_normalization c1)
+| c0 _;_ c1 => (plus_normalization c0) _;_ (plus_normalization c1)
+end.*)
+
+Search (_ < max _ _).
+
+Lemma can_reduce : forall (c : Contract), reducible c -> (forall (e : EventType), con_size (c / e) < con_size c).
+Proof. intros c H. induction H.
+- intuition.
+- intuition. simpl. destruct (eq_event x e). { intuition. } { intuition. }
+- intro e. simpl. destruct (is_failure (c0 / e)).
+  * apply reducible_size in H as H2. apply Nat.max_case_strong.
+    ** intro H3. simpl in H2. unfold gt. Abort. symmetry in H2. apply Nat.max_lt_iff. transitivity (con_size c1).
+    **
+    Abort.
+
+Lemma not_failure_imp_reduce : forall (c : Contract), Failure <> c -> reducible c.
+Proof. induction c.
+- intro H. simpl. apply RSuccess.
+- contradiction.
+- intro H. simpl. apply REvent.
+- intro H. destruct (failure_or_not c1).
+  * rewrite H0. apply RPlusLF.
+  * assert (H': Failure <> c1). { unfold not in *. intro H2. apply H0. symmetry. apply H2. } 
+    apply IHc1 in H'. apply (RPlusL c1 c2 H').
+- intro H. apply RSeq.
+Qed.
+
+
+Lemma dec : forall (c : Contract), Failure <> c -> (forall (e : EventType), con_size (c / e) < con_size c).
+Proof. intros c H e. apply not_failure_imp_reduce in H. apply can_reduce. apply H.
+Qed.
+
+Lemma wildcard_right : forall c0 c1, (forall wildcard' : Contract,
+        ~ (wildcard' = c0 /\ Failure = c1) ) -> Failure <> c1.
+Proof. Admitted.
+
+Lemma wildcard_left : forall c0 c1, (forall wildcard' : Contract,
+        ~ (Failure = c1 /\ wildcard' = c0) ) -> Failure <> c1.
+Proof. Admitted.
+
+Search (?a + ?b <= ?c + ?b).
+
+Program Fixpoint times (c0 c1 : Contract) {measure ((con_size c0) + (con_size c1))} : Contract :=
+match c0,c1 with
+| Failure,_ => Failure
+| _, Failure => Failure
+| _,_ => (times ((c0 / Transfer)) c1) _+_ (times c0 ((c1 / Transfer)) )   _+_
+       (times ((c0 / Notify))   c1) _+_ (times c0 ((c1 / Notify)) )
+end.
+Next Obligation.  
+apply Plus.plus_lt_compat_r. 
+apply wildcard_left in H0. apply dec with (e := Transfer) in H0. apply H0.
+Qed. 
+Next Obligation.
+apply Plus.plus_lt_compat_l. 
+apply wildcard_right in H. apply dec with (e := Transfer) in H. apply H.
+Qed. 
+Next Obligation.
+apply Plus.plus_lt_compat_r. 
+apply wildcard_left in H0. apply dec with (e := Notify) in H0. apply H0.
+Qed.
+Next Obligation.
+apply Plus.plus_lt_compat_l. 
+apply wildcard_right in H. apply dec with (e := Notify) in H. apply H.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H1.
+  - intuition. discriminate H0.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H2.
+  - intuition. discriminate H1.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H3.
+  - intuition. discriminate H2.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H3.
+  - intuition. discriminate H2.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H2.
+  - intuition. discriminate H1.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H3.
+  - intuition. discriminate H2.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H4.
+  - intuition. discriminate H3.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H4.
+  - intuition. discriminate H3.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H3.
+  - intuition. discriminate H2.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H4.
+  - intuition. discriminate H3.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H5.
+  - intuition. discriminate H4.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H5.
+  - intuition. discriminate H4.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H3.
+  - intuition. discriminate H2.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H4.
+  - intuition. discriminate H3.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H5.
+  - intuition. discriminate H4.
+Qed.
+Next Obligation.
+split.
+  - intuition. discriminate H5.
+  - intuition. discriminate H4.
+Qed.
+
 
 
 Fixpoint trans (p : PContract) : Contract :=
@@ -543,67 +748,12 @@ match p with
 | PSuccess => Success
 | PFailure => Failure
 | PEvent e => Event e
-| p0 -*- p1 => unfold (trans p0) (trans p1)
+| p0 -*- p1 => times (trans p0) (trans p1)
 | p0 -+- p1 => (trans p0) _+_ (trans p1)
 end.
 
 
 
-n _;_ trans (p0 p/ Notify -*- p1 -+- p0 -*- p1)
-
-Lemma pmatches_matches : forall (s : Trace)(p : PContract),
-                              s p=~ p -> s =~ (trans p). 
-
-(*Lemma pfailure_false : 
-
-Lemma nil_pnu : forall (c : PContract), [] p==~ c -> pnu c = true.
-Proof. induction c. 
-- intro H. reflexivity.
-- intro H.  simpl in H.
-
-Lemma pcomp_imp_oper : forall (s : Trace)(c : PContract), s p==~ c  -> s p=~ c = true .
-Proof.
-intros s c H. inversion H.
-- simpl. reflexivity.
-- simpl. rewrite eq_event_refl. reflexivity.
-- inversion H3.
-  * induction s.
-    ** simpl. inversion H3. *)
-
-
-
-
-
-
-
-
-
-
-
-
-Fixpoint pcontract_to_contract (p : PContract) : Contract :=
-
-
-Lemma pmatches_comp_imp_matches : forall (s : Trace)(p : PContract), s p==~ p -> exists (c : Contract), s ==~ c.
-Proof.
-intros s p H. inversion H.
-- 
-
-Definition p_eq (p1 p2 : PContract) : Prop := forall s, s p==~ p1 <-> s p==~ p2.
-Notation "a =P= b" := (p_eq a b) (at level 70).
-
-Lemma distr_times : forall (p1 p2 PContract)(e : EventType),
-
-
-
-Definition sum_expand (p PContract) : PContarct :=
-match p with
-| p1 -*- p2 -> 
-| _ -> p
-end.
-  
-
-
-Lemma parallel_to_plus : forall (e : EventType)(p1 p2 : PContract), p1 -*- p2 =P= 
-
+Lemma pmatches_matches : forall (p : PContract), (forall (s : Trace), s p==~ p <-> s ==~ (trans p)).
+Proof. Admitted.
 
