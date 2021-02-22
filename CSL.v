@@ -559,15 +559,6 @@ match c with
 | c0 _+_ c1 => max (con_size c0) (con_size c1)
 end.
 
-(*Lemma times_termination : forall (c : Contract)(e : EventType), (Failure <> normalize_plus c) ->
-  con_size (normalize_plus (c / e)) < con_size c.
-Proof. induction c.
-- intros e H. intuition.
-- intros e H. intuition.
-- intros e' H. simpl. destruct (eq_event e e'). { intuition. } { intuition. }
-- intros e H. simpl. destruct (is_failure (c1 / e)) eqn:Heqn.
-  * apply Nat.max_case_strong.
-    ** apply is_failure_failure in Heqn. Abort.*)
 
 Inductive reducible : Contract -> Prop :=
 | RSuccess : reducible Success
@@ -588,17 +579,6 @@ Proof. Admitted.
 Lemma size_reducible : forall (c : Contract), con_size c > con_size Failure -> reducible c.
 Proof. Admitted.
 
-(*Fixpoint plus_normalization c :=
-match c with
-| Success => Success
-| Failure => Failure
-| Event e => Event e
-| Failure _+_ c1 => c1
-| c0 _+_ c1 => (plus_normalization c0) _+_ (plus_normalization c1)
-| c0 _;_ c1 => (plus_normalization c0) _;_ (plus_normalization c1)
-end.*)
-
-Search (_ < max _ _).
 
 Lemma can_reduce : forall (c : Contract), reducible c -> (forall (e : EventType), con_size (c / e) < con_size c).
 Proof. intros c H. induction H.
