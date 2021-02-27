@@ -625,36 +625,60 @@ Inductive reducible : Contract -> Prop :=
 | RPlusL c1 c2 (H : reducible c1) : reducible (c1 _+_ c2)
 | RPlusR c1 c2 (H : reducible c2) : reducible (c1 _+_ c2).
 
-Lemma stuck_or_reducible : forall (c : Contract), stuck c \/ reducible c.
-Proof. induction c.
-- right. apply RSuccess.
-- left. apply SFailure.
-- right. apply REvent.
-- destruct IHc1.
-  * destruct IHc2.
-    ** left. apply (SPlus c1 c2 H H0).
-    ** right. apply (RPlusR c1 c2 H0).
-  * right. apply (RPlusL c1 c2 H).
-- destruct IHc1.
-  * left. apply (SSeqL c1 c2 H).
-  * destruct IHc2.
-    ** left. apply (SSeqR c1 c2 H0).
-    ** right. apply (RSeq c1 c2 H H0).
+Inductive safe : Contract -> Prop :=
+| SASuccess : safe Success
+| SAEvent e : safe (Event e)
+| SASeq c1 c2 (H1 : safe c1) (H2 : safe c2) : safe (c1 _;_ c2)
+| SAPlus c1 c2 (H1 : safe c1) (H2 : safe c2) : safe (c1 _+_ c2).
+
+
+Lemma is_failure_not_safe : forall (c : Contract), is_failure (norm c) = true -> ~(safe (norm c)).
+Proof. 
+intros c H. apply is_failure_true in H. rewrite H. intro H2. inversion H2.
 Qed.
 
-Lemma not_stuck_reducible : forall (c : Contract), ~(stuck c) <-> reducible c.
-Proof.
-split. 
-- intro H. destruct (stuck_or_reducible c).
-  * contradiction.
-  * apply H0.
-- intro H. induction H.
-  * intuition. inversion H.
-  * intuition. inversion H.
-  * intuition. inversion H1. intuition. intuition.
-  * intro H2. inversion H2. contradiction.
-  * intro H2. inversion H2. contradiction.
+
+Lemma norm_not_failure_plus : forall (c1 c2 : Contract), (is_failure (norm c1) = false -> safe (norm c1)) -> 
+(is_failure (norm c2) = false -> safe (norm c2)) -> is_failure (norm (c1 _+_ c2)) = false -> safe (norm c1) \/ safe (norm c2).
+Proof. 
+intros c1 c2 H0 H1 H2. simpl in H2. destruct (is_failure (norm c1)) eqn:Heqn.
+- right. apply H1. apply H2.
+- destruct (is_failure (norm c2)) eqn:Heqn2.
+  * left. apply H0. reflexivity.
+  * left. apply H0. reflexivity.
 Qed.
+
+Lemma norm_not_failure_seq : forall (c1 c2 : Contract), (is_failure (norm c1) = false -> safe (norm c1)) -> 
+(is_failure (norm c2) = false -> safe (norm c2)) ->
+   is_failure (norm (c1 _;_ c2)) = false -> safe (norm c1) /\ safe (norm c2).
+Proof.
+intros c1 c2 H0 H1 H2. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn.
+- simpl in H2. rewrite Heqn in H2. simpl in H2. inversion H2.
+- simpl in H2. rewrite Heqn in H2. apply orb_false_iff in Heqn as [Heqn1 Heqn2].
+  split. { apply H0. apply Heqn1. } { apply H1. apply Heqn2. }
+Qed.
+
+Lemma norm_not_failure_imp_safe : forall (c : Contract), is_failure (norm c) = false -> safe (norm c).
+Proof.
+induction c.
+- intro H. apply SASuccess.
+- intro H. simpl in H. inversion H.
+- intro H. apply SAEvent.
+- intro H. pose proof (norm_not_failure_plus _ _ IHc1 IHc2). simpl. destruct (is_failure (norm c1)) eqn:Heqn1.
+  * apply is_failure_not_safe in Heqn1. apply H0 in H as [H | H].
+    ** contradiction.
+    ** auto.
+  * destruct (is_failure (norm c2)) eqn:Heqn2.
+    ** apply H0 in H as [H | H].
+      *** apply H.
+      *** auto.
+    ** apply SAPlus. { auto. } { auto. }
+- intro H. simpl. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn.
+  * apply (norm_not_failure_seq _ _ IHc1 IHc2) in H as [H1 H2]. apply orb_true_iff in Heqn as [Heqn | Heqn].
+    ** apply is_failure_not_safe in Heqn. contradiction.
+    ** apply is_failure_not_safe in Heqn. contradiction.
+  * apply orb_false_iff in Heqn as [Heqn1 Heqn2]. apply SASeq. { apply IHc1. apply Heqn1. } { apply IHc2. apply Heqn2. } 
+Qed. 
 
 Lemma size_ge_2 : forall (c : Contract), 2 <= con_size c.
 Proof. induction c.
@@ -665,14 +689,6 @@ Proof. induction c.
 - simpl. rewrite IHc1. rewrite <- (Nat.mul_1_r (con_size c1)) at 1. apply Nat.mul_le_mono.
   { intuition. } { intuition. }
 Qed.
-
-Lemma derive_size_le : forall (c : Contract)(e : EventType), reducible c -> con_size (c / e) <= con_size c.
-Proof.
-induction c.
-- intro e. simpl. intuition.
-- intro e. auto.
-
-Admitted. 
 
 
 
@@ -685,55 +701,86 @@ rewrite <- (Nat.add_sub_swap _ _ _ H1). assert (H3: a + 1 - 2 = a - 1). { lia. }
 rewrite Nat.mul_sub_distr_r. apply Nat.sub_le_mono_l. simpl. intuition.
 Qed.
 
-Lemma reducible_le : forall (c : Contract), reducible c -> forall (e : EventType), con_size (c / e) <= (con_size c) - 2.
+
+Lemma safe_le : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) <= (con_size c) - 2.
 Proof. 
 intros c H. induction H.
 - intuition.
 - intuition. simpl. destruct (eq_event e e0). { intuition. } { intuition. } 
 - intro e. simpl. destruct (nu c1) eqn:Heqn.
-  * simpl. specialize IHreducible1 with e.
+  * simpl. specialize IHsafe1 with e. specialize IHsafe2 with e.
     transitivity ((con_size c1 - 2) * con_size c2 + con_size (c2 / e)).
-    ** simpl. apply Plus.plus_le_compat_r. apply Mult.mult_le_compat_r. apply IHreducible1.
+    ** simpl. apply Plus.plus_le_compat_r. apply Mult.mult_le_compat_r. apply IHsafe1.
     ** transitivity (con_size c1 * con_size c2 - 2 * con_size c2 + con_size c2).
-      *** rewrite Nat.mul_sub_distr_r. apply Plus.plus_le_compat_l.  apply (derive_size_le _ _ H0).
+      *** rewrite Nat.mul_sub_distr_r. apply Plus.plus_le_compat_l. 
+          transitivity (con_size c2 - 2). { apply IHsafe2. } { lia. }
       *** apply (arith_helper _ _ (size_ge_2 c1) (size_ge_2 c2)).
   * simpl. transitivity ((con_size c1 - 2) * con_size c2).
-    ** apply Nat.mul_le_mono_r. apply IHreducible1.
+    ** apply Nat.mul_le_mono_r. apply IHsafe1.
     ** rewrite Nat.mul_sub_distr_r. apply Nat.sub_le_mono_l. transitivity (2 * 2).
       *** simpl. intuition.
       *** apply Mult.mult_le_compat_l. apply size_ge_2.
 - intro e. simpl. assert (HR: con_size c1 + con_size c2 - 2 = (con_size c1 -2) + con_size c2).
   * rewrite (Nat.add_sub_swap _ _ _ (size_ge_2 c1)). rewrite Nat.add_comm. reflexivity.
   * rewrite HR. apply Nat.add_le_mono.
-    ** apply IHreducible.
-    ** apply derive_size_le.
-- intro e. simpl. rewrite <- (Nat.add_sub_assoc _ _ _ (size_ge_2 (c2))).
-  apply Nat.add_le_mono. { apply derive_size_le. } { apply IHreducible. }
+    ** apply IHsafe1.
+    ** transitivity (con_size c2 - 2). { apply IHsafe2. } { lia. } 
 Qed.
 
-Lemma reducible_lt : forall (c : Contract), reducible c -> forall (e : EventType), con_size (c / e) < (con_size c).
+(*- intro e. simpl. rewrite <- (Nat.add_sub_assoc _ _ _ (size_ge_2 (c2))).
+  apply Nat.add_le_mono. { apply derive_size_le. } { apply IHreducible. }
+Qed.*)
+
+Lemma safe_lt : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) < (con_size c).
 Proof. 
-intros c H e. pose proof (reducible_le c H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_2 c)) in H0.
+intros c H e. pose proof (safe_le c H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_2 c)) in H0.
 rewrite Nat.sub_succ in H0. transitivity (con_size c - 1). { apply H0. } 
 apply Nat.sub_lt. transitivity 2. intuition. apply size_ge_2. intuition.
 Qed.
 
 Definition alphabet := [Transfer;Notify].
 
+Search (_  <= _ * _ ).
 
+Lemma norm_le : forall (c : Contract), con_size (norm c) <= con_size c.
+Proof.
+induction c.
+- simpl. reflexivity.
+- simpl. reflexivity.
+- simpl. reflexivity.
+- simpl. destruct (is_failure (norm c1)) eqn:Heqn1.
+  * lia. 
+  * destruct (is_failure (norm c2)) eqn:Heqn2.
+    ** lia.
+    ** simpl. apply Nat.add_le_mono.  {lia. } { lia. }
+- simpl. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn1.
+  * simpl. destruct Heqn1.
+    ** pose proof (size_ge_2  c1). rewrite H. rewrite <- Nat.mul_1_r at 1. apply Nat.mul_le_mono.
+      *** reflexivity.
+      *** transitivity 2. { auto. } { apply (size_ge_2  c2). }  
+  * simpl. apply Nat.mul_le_mono. { apply IHc1. } { apply IHc2. }
+Qed.
 
-Program Fixpoint times (c0 c1 : Contract) {measure ((con_size c0) + (con_size c1))} : Contract :=
-if dec (is_stuck c0 || is_stuck c1)
-  then Failure
-  else fold_left (fun acc e => acc _+_ ((times ((c0 / e)) c1) _+_ (times c0 ((c1 / e)))))
+Program Fixpoint times (c0 c1 : Contract) {measure ((con_size (c0)) + (con_size (c1)))} : Contract :=
+let c0' := norm c0
+in let c1' := norm c1
+   in if dec (is_failure c0' || is_failure c1')
+        then Failure
+        else fold_left (fun acc e => acc _+_ ((times ((c0' / e)) c1') _+_ (times c0' ((c1' / e)))))
           alphabet Failure.
 Next Obligation.
-apply orb_false_elim in H as [H1 H2]. apply stuck_reflection_f in H1. apply (not_stuck_reducible c0) in H1.
-apply Plus.plus_lt_compat_r. apply (reducible_lt c0 H1).
+apply orb_false_elim in H as [H1 H2].
+apply norm_not_failure_imp_safe in H1. apply norm_not_failure_imp_safe in H2. 
+apply (Nat.lt_le_trans _ (con_size (norm c0) + con_size (norm c1)) _).
+- apply Nat.add_lt_le_mono. { apply (safe_lt (norm c0) H1). } { reflexivity. }
+- apply Nat.add_le_mono. { apply norm_le. } { apply norm_le. } 
 Qed.
 Next Obligation.
-apply orb_false_elim in H as [H1 H2]. apply stuck_reflection_f in H2. apply (not_stuck_reducible c1) in H2.
-apply Plus.plus_lt_compat_l. apply (reducible_lt c1 H2).
+apply orb_false_elim in H as [H1 H2].
+apply norm_not_failure_imp_safe in H1. apply norm_not_failure_imp_safe in H2. 
+apply (Nat.lt_le_trans _ (con_size (norm c0) + con_size (norm c1)) _).
+- apply Nat.add_lt_mono_l. apply (safe_lt (norm c1) H2).
+- apply Nat.add_le_mono. { apply norm_le. } { apply norm_le. } 
 Qed. 
 
 
