@@ -1,4 +1,6 @@
 Require Import Lists.List.
+Require Import FunInd.
+Require Import Recdef.
 Require Import Bool.Bool.
 Require Import Program.
 Require Import Arith.PeanoNat.
@@ -7,6 +9,7 @@ Require Import micromega.Lia.
 Import ListNotations.
 Require Export Setoid.
 Require Export Relation_Definitions.
+Require Import Arith Wf_nat.
 
 
 Inductive EventType : Type :=
@@ -587,44 +590,6 @@ match c with
 end.
                            
 
-Inductive stuck : Contract -> Prop :=
-| SFailure : stuck Failure
-| SSeqL c0 c1 (H : stuck c0) : stuck (c0 _;_ c1)
-| SSeqR c0 c1 (H : stuck c1) : stuck (c0 _;_ c1) (*necessary to ensure size decrease*)
-| SPlus c0 c1 (H0 : stuck c0)
-              (H1 : stuck c1) : stuck (c0 _+_ c1).
-
-Fixpoint is_stuck (c : Contract) : bool := 
-match c with
-| Failure => true
-| c0 _;_ c1 => (is_stuck c0) || (is_stuck c1)
-| c0 _+_ c1 => (is_stuck c0) && (is_stuck c1)
-| _ => false
-end.
-
-Search (_ || _ = false).
-
-Lemma stuck_reflection_f : forall (c : Contract), is_stuck c = false -> ~(stuck c).
-Proof. 
-induction c.
-- intro H. intuition. inversion H0.
-- intro H. intuition.
-- intro H. intuition. inversion H0.
-- intro H. intuition. inversion H0. simpl in H. rewrite andb_false_iff in H. destruct H.
-  * apply IHc1. apply H. apply H3.
-  * apply IHc2. apply H. apply H4.
-- intro H. simpl in H. apply orb_false_elim in H as [H1 H2]. apply IHc1 in H1.
-  apply IHc2 in H2. unfold not. intro H3. inversion H3. contradiction. contradiction.
-Qed.
-
-
-Inductive reducible : Contract -> Prop :=
-| RSuccess : reducible Success
-| REvent e : reducible (Event e)
-| RSeq c1 c2 (H1 : reducible c1) (H2 : reducible c2) : reducible (c1 _;_ c2)
-| RPlusL c1 c2 (H : reducible c1) : reducible (c1 _+_ c2)
-| RPlusR c1 c2 (H : reducible c2) : reducible (c1 _+_ c2).
-
 Inductive safe : Contract -> Prop :=
 | SASuccess : safe Success
 | SAEvent e : safe (Event e)
@@ -727,10 +692,6 @@ intros c H. induction H.
     ** transitivity (con_size c2 - 2). { apply IHsafe2. } { lia. } 
 Qed.
 
-(*- intro e. simpl. rewrite <- (Nat.add_sub_assoc _ _ _ (size_ge_2 (c2))).
-  apply Nat.add_le_mono. { apply derive_size_le. } { apply IHreducible. }
-Qed.*)
-
 Lemma safe_lt : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) < (con_size c).
 Proof. 
 intros c H e. pose proof (safe_le c H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_2 c)) in H0.
@@ -761,13 +722,29 @@ induction c.
   * simpl. apply Nat.mul_le_mono. { apply IHc1. } { apply IHc2. }
 Qed.
 
+
+
+Program Fixpoint times (c0 c1 : Contract) {measure ((con_size (c0)) + (con_size (c1)))} : list Contract:=
+let c0' := norm c0
+in let c1' := norm c1
+   in if dec (is_failure c0' || is_failure c1')
+        then []
+        else (flat_map (fun e => map (fun c => (Event e) _;_ c) (times (c0' / e) c1')) alphabet)
+             ++
+             (flat_map (fun e => map (fun c => (Event e) _;_ c) (times c0' (c1' /e ))) alphabet).
+(*
+++ (times c0' ((c1' / e))))
+)
+fold_left (fun acc e => acc _+_ ((times ((c0' / e)) c1') _+_ (times c0' ((c1' / e)))))
+          alphabet Failure.
+
 Program Fixpoint times (c0 c1 : Contract) {measure ((con_size (c0)) + (con_size (c1)))} : Contract :=
 let c0' := norm c0
 in let c1' := norm c1
    in if dec (is_failure c0' || is_failure c1')
         then Failure
         else fold_left (fun acc e => acc _+_ ((times ((c0' / e)) c1') _+_ (times c0' ((c1' / e)))))
-          alphabet Failure.
+          alphabet Failure.*)
 Next Obligation.
 apply orb_false_elim in H as [H1 H2].
 apply norm_not_failure_imp_safe in H1. apply norm_not_failure_imp_safe in H2. 
@@ -781,20 +758,93 @@ apply norm_not_failure_imp_safe in H1. apply norm_not_failure_imp_safe in H2.
 apply (Nat.lt_le_trans _ (con_size (norm c0) + con_size (norm c1)) _).
 - apply Nat.add_lt_mono_l. apply (safe_lt (norm c1) H2).
 - apply Nat.add_le_mono. { apply norm_le. } { apply norm_le. } 
-Qed. 
+Qed.
 
+Definition list_derivative (l : list Contract)(e : EventType) := map (fun c => c / e) l.
 
+Definition plus_fold (l : list Contract) : Contract := fold_left (fun acc e => acc _+_ e) l Failure.
 
 Fixpoint trans (p : PContract) : Contract :=
 match p with
 | PSuccess => Success
 | PFailure => Failure
 | PEvent e => Event e
-| p0 -*- p1 => times (trans p0) (trans p1)
+| p0 -*- p1 => plus_fold (times (trans p0) (trans p1))
 | p0 -+- p1 => (trans p0) _+_ (trans p1)
 end.
 
+Inductive non_seq : Contract -> Prop :=
+| NSSuccess : non_seq Success
+| NSFailure : non_seq Failure
+| NSEvent e : non_seq (Event e)
+| NSPlus c0 c1 : non_seq (c0 _+_ c1).
 
+Fixpoint trans_inv (c : Contract) : (bool * PContract) :=
+match c with
+| Success => (true,PSuccess)
+| Failure => (true,PFailure)
+| Event e => (true,PEvent e)
+| c0 _+_ c1 => let (f0,c0') :=(trans_inv c0) 
+               in let (f1,c1') := trans_inv c1
+                  in (f0 && f1,c0' -+- c1')       
+| c0 _;_ c1 => (false,PFailure)
+end.
+
+Lemma trans_non_seq : forall (p : PContract), non_seq (trans p).
+Proof. Admitted.
+
+Lemma trans_inv_non_seq : forall c : Contract, non_seq c -> fst (trans_inv c) = true.
+Proof. Admitted.
+
+Lemma trans_cancel : forall (c : Contract)(p : PContract), trans_inv c = (true,p) -> trans p = c.
+Proof. Admitted.
+
+(* Lemma trans_cancel : forall (p p' : PContract)(c : Contract), trans p = c -> trans_inv c = (true,p') -> 
+(forall (s : Trace), s p==~ p <-> s p==~ p').
+Proof. Admitted.*)
+
+
+Lemma split_plus_fold : forall (s : Trace)(l l1 l2 : list Contract), 
+s ==~ plus_fold l -> l = l1 ++ l2 -> s ==~ (plus_fold l1) \/ s ==~ (plus_fold l2).
+Proof. Admitted.
+
+Lemma list_derivative_correctness : forall (e : EventType)(s : Trace)(l : list Contract), e::s =~ plus_fold l = 
+s =~ plus_fold (list_derivative l e).
+Proof. Admitted.
+
+Lemma list_derivative_decomposes : forall (c1 c2 : Contract)(e : EventType), list_derivative (times c1 c2) e = 
+   ((times (c1 / e) c2) ++ (times c1 (c2 / e))). 
+Proof. Admitted.
+
+(*proof sketch: take hypothesis from semantic to operational proposition, move derive inside as list_derivative,
+decompose list_derivative, make decomposition a disjunction with split_plus_fold*)
+Lemma times_derivative : forall (c1 c2 : Contract)(e : EventType)(s : Trace), e::s ==~ ((plus_fold (times c1 c2))) -> 
+   s ==~ plus_fold (times (c1 / e) c2) \/ s ==~ plus_fold (times c1 (c2 / e)). 
+Proof.
+intros c1 c2 e s H. apply comp_iff_oper in H. rewrite list_derivative_correctness in H.
+rewrite (list_derivative_decomposes c1 c2 e) in H. apply comp_iff_oper in H. 
+apply (split_plus_fold _ _ (times (c1 / e) c2) (times c1 (c2 / e)) H). reflexivity.
+Qed.
+
+
+Lemma times_par : forall (c1 c2 : Contract) (s3 : Trace), s3 ==~ plus_fold (times c1 c2) -> exists (s1 s2 : Trace), 
+interleave s1 s2 s3 /\ s1 ==~ c1 /\ s2 ==~ c2.
+Proof. Admitted.
+
+
+
+Lemma matches_pmatches : forall (p : PContract), (forall (s : Trace), s ==~ (trans p) -> s p==~ p).
+Proof.
+induction p.
+- intros s H. simpl in H. inversion H. apply MPSuccess.
+- intros s H. simpl in H. inversion H.
+- intros s H. simpl in H. inversion H. apply MPEvent.
+- intros s H. simpl in H. inversion H.
+  * apply MPPlusL. apply IHp1. apply H2.
+  * apply MPPlusR. apply IHp2. apply H1.
+- intros s H. simpl in H. apply times_par in H. destruct H as [s1 [s2 [P1 [P2 P3]]]].
+  * apply (MPPar s1 _ s2).  { apply (IHp1 _ P2). } { apply (IHp2 _ P3). } { apply P1. }
+Qed.
 
 Lemma pmatches_matches : forall (p : PContract), (forall (s : Trace), s p==~ p <-> s ==~ (trans p)).
 Proof. Admitted.
