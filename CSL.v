@@ -9,7 +9,6 @@ Require Import micromega.Lia.
 Import ListNotations.
 Require Export Setoid.
 Require Export Relation_Definitions.
-Require Import Arith Wf_nat.
 
 
 Inductive EventType : Type :=
@@ -563,9 +562,9 @@ Inductive pmatches_comp : Trace -> PContract -> Prop :=
 (*the size of a contract is at least 2 and decreases in size by two when the derivative is taken*)
 Fixpoint con_size (c:Contract):nat :=
 match c with
-| Success => 4
-| Failure => 2
-| Event e => 6
+| Success => 2
+| Failure => 1
+| Event e => 3
 | c0 _;_ c1 => (con_size c0) * (con_size c1)
 | c0 _+_ c1 => (con_size c0) + (con_size c1)
 end.
@@ -645,7 +644,7 @@ induction c.
   * apply orb_false_iff in Heqn as [Heqn1 Heqn2]. apply SASeq. { apply IHc1. apply Heqn1. } { apply IHc2. apply Heqn2. } 
 Qed. 
 
-Lemma size_ge_2 : forall (c : Contract), 2 <= con_size c.
+Lemma size_ge_1 : forall (c : Contract), 1 <= con_size c.
 Proof. induction c.
 - simpl. intuition. 
 - simpl. intuition.
@@ -655,53 +654,59 @@ Proof. induction c.
   { intuition. } { intuition. }
 Qed.
 
+Search (_  = _ -?a + ?a).
 
-
-Lemma arith_helper : forall a b : nat, 2 <= a -> 2 <= b -> a * b - 2 * b + b <= a * b - 2.
+Lemma arith_helper : forall a b : nat, 1 <= a -> 1 <= b -> a * b - 1 * b + b <= a * b - 1.
 Proof.
 intros a b H1 H2.
 rewrite Nat.add_comm. rewrite <- Nat.mul_sub_distr_r. rewrite <- (Nat.mul_1_r b) at 1.
 rewrite <- Nat.mul_comm. rewrite <- Nat.mul_add_distr_r. rewrite <- Nat.add_comm. 
-rewrite <- (Nat.add_sub_swap _ _ _ H1). assert (H3: a + 1 - 2 = a - 1). { lia. } rewrite H3. 
+rewrite <- (Nat.add_sub_swap _ _ _ H1). assert (H3: a + 1 - 1 = a). { lia. } rewrite H3. lia. 
 rewrite Nat.mul_sub_distr_r. apply Nat.sub_le_mono_l. simpl. intuition.
 Qed.
 
+Lemma mult_two_contracts_ge1 : forall (c1 c2 : Contract), 1 <= con_size c1 * con_size c2.
+Proof.
+intros. rewrite <- Nat.mul_1_l at 1. apply Nat.mul_le_mono. { apply size_ge_1. } { apply size_ge_1. }
+Qed.
 
-Lemma safe_le : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) <= (con_size c) - 2.
+Search (_ - ?a + ?a = _).
+Lemma safe_le : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) <= (con_size c) - 1.
 Proof. 
 intros c H. induction H.
 - intuition.
 - intuition. simpl. destruct (eq_event e e0). { intuition. } { intuition. } 
 - intro e. simpl. destruct (nu c1) eqn:Heqn.
   * simpl. specialize IHsafe1 with e. specialize IHsafe2 with e.
-    transitivity ((con_size c1 - 2) * con_size c2 + con_size (c2 / e)).
-    ** simpl. apply Plus.plus_le_compat_r. apply Mult.mult_le_compat_r. apply IHsafe1.
-    ** transitivity (con_size c1 * con_size c2 - 2 * con_size c2 + con_size c2).
-      *** rewrite Nat.mul_sub_distr_r. apply Plus.plus_le_compat_l. 
-          transitivity (con_size c2 - 2). { apply IHsafe2. } { lia. }
-      *** apply (arith_helper _ _ (size_ge_2 c1) (size_ge_2 c2)).
-  * simpl. transitivity ((con_size c1 - 2) * con_size c2).
+    transitivity ((con_size c1 - 1) * con_size c2 + (con_size c2 - 1)).
+    ** apply Nat.add_le_mono. { apply Mult.mult_le_compat_r. intuition. } { intuition. }
+    ** rewrite Nat.mul_sub_distr_r. simpl. rewrite Nat.add_0_r. rewrite Nat.add_comm. 
+      rewrite <- (Nat.add_sub_swap _ _ _ (size_ge_1 c2)) . rewrite (Nat.add_le_mono_r _ _ 1).
+      rewrite Nat.sub_add.
+      *** rewrite Nat.sub_add. 2: { apply mult_two_contracts_ge1. }
+          rewrite Nat.add_comm. rewrite Nat.sub_add. { reflexivity. }
+          rewrite <- Nat.mul_1_l at 1. apply Nat.mul_le_mono_r. apply size_ge_1.
+      *** rewrite <- Nat.add_0_r at 1. apply Nat.add_le_mono. { apply size_ge_1. } { lia. }
+  * simpl. transitivity ((con_size c1 - 1) * con_size c2).
     ** apply Nat.mul_le_mono_r. apply IHsafe1.
-    ** rewrite Nat.mul_sub_distr_r. apply Nat.sub_le_mono_l. transitivity (2 * 2).
+    ** rewrite Nat.mul_sub_distr_r. apply Nat.sub_le_mono_l. transitivity (1 * 1).
       *** simpl. intuition.
-      *** apply Mult.mult_le_compat_l. apply size_ge_2.
-- intro e. simpl. assert (HR: con_size c1 + con_size c2 - 2 = (con_size c1 -2) + con_size c2).
-  * rewrite (Nat.add_sub_swap _ _ _ (size_ge_2 c1)). rewrite Nat.add_comm. reflexivity.
+      *** apply Mult.mult_le_compat_l. apply size_ge_1.
+- intro e. simpl. assert (HR: con_size c1 + con_size c2 - 1 = (con_size c1 - 1) + con_size c2).
+  * rewrite (Nat.add_sub_swap _ _ _ (size_ge_1 c1)). rewrite Nat.add_comm. reflexivity.
   * rewrite HR. apply Nat.add_le_mono.
     ** apply IHsafe1.
-    ** transitivity (con_size c2 - 2). { apply IHsafe2. } { lia. } 
+    ** transitivity (con_size c2 - 1). { apply IHsafe2. } { lia. } 
 Qed.
 
 Lemma safe_lt : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) < (con_size c).
-Proof. 
-intros c H e. pose proof (safe_le c H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_2 c)) in H0.
-rewrite Nat.sub_succ in H0. transitivity (con_size c - 1). { apply H0. } 
-apply Nat.sub_lt. transitivity 2. intuition. apply size_ge_2. intuition.
+Proof.
+intros c H e. pose proof (safe_le c H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_1 c)) in H0.
+rewrite Nat.sub_succ in H0. rewrite Nat.sub_0_r in H0. apply H0. 
 Qed.
 
 Definition alphabet := [Transfer;Notify].
 
-Search (_  <= _ * _ ).
 
 Lemma norm_le : forall (c : Contract), con_size (norm c) <= con_size c.
 Proof.
@@ -715,10 +720,7 @@ induction c.
     ** lia.
     ** simpl. apply Nat.add_le_mono.  {lia. } { lia. }
 - simpl. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn1.
-  * simpl. destruct Heqn1.
-    ** pose proof (size_ge_2  c1). rewrite H. rewrite <- Nat.mul_1_r at 1. apply Nat.mul_le_mono.
-      *** reflexivity.
-      *** transitivity 2. { auto. } { apply (size_ge_2  c2). }  
+  * simpl.  destruct Heqn1. apply mult_two_contracts_ge1.
   * simpl. apply Nat.mul_le_mono. { apply IHc1. } { apply IHc2. }
 Qed.
 
