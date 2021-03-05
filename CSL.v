@@ -7,77 +7,31 @@ Require Import Arith.PeanoNat.
 Require Import Structures.GenericMinMax.
 From Equations Require Import Equations.
 Require Import micromega.Lia.
+Require Import FunctionalExtensionality.
 Import ListNotations.
 Require Export Setoid.
 Require Export Relation_Definitions.
+Require Import Arith.
+
+Set Implicit Arguments.
 
 
 Inductive EventType : Type :=
 | Transfer : EventType
 | Notify : EventType.
 
-Definition eq_event (e1:EventType)(e2:EventType):bool :=
-match e1,e2 with
-| Transfer,Transfer => true
+
+Definition eqb_event (e1 e2:EventType):bool :=
+match e1, e2 with
+| Transfer, Transfer => true
 | Notify, Notify => true
-| _ , _ => false
+| _, _ => false
 end.
 
-Lemma eq_event_refl : forall e, eq_event e e = true.
-Proof. destruct e.
-- reflexivity.
-- reflexivity.
-Qed.
-
-Lemma eq_event_equals : forall (e1 e2 : EventType), (eq_event e1 e2) = true -> e1 = e2.
-Proof. intros e1 e2 H. destruct e1.
-  - simpl in H. destruct e2.
-    * reflexivity.
-    * discriminate.
-  - simpl in H. destruct e2.
-    * discriminate.
-    * reflexivity.
-Qed.
-
-Lemma equals_eq_event : forall (e1 e2 : EventType), e1 = e2 -> (eq_event e1 e2) = true.
-Proof. intros e1 e2 H. inversion H. apply eq_event_refl.
-Qed.
-
-Lemma eq_event_iff_eq : forall (e1 e2 : EventType), (eq_event e1 e2) = true <-> e1 = e2.
-Proof. split.
-- apply eq_event_equals.
-- apply equals_eq_event.
-Qed.
-
-Inductive reflect (P : Prop) : bool -> Prop :=
-| ReflectT (H :   P) : reflect P true
-| ReflectF (H : ~ P) : reflect P false.
-
-Theorem iff_reflect : forall P b, (P <-> b = true) -> reflect P b.
-Proof.
-  intros P b H. destruct b.
-  - apply ReflectT. rewrite H. reflexivity.
-  - apply ReflectF. rewrite H. intros H'. discriminate.
-Qed.
-
-Theorem reflect_iff : forall P b, reflect P b -> (P <-> b = true).
-Proof.
-intros P b H. inversion H.
-- split.
-  * intro H2. reflexivity.
-  * intro H2. apply H0.
-- split. intros H2. inversion H. rewrite <- H1 in H4. discriminate H4.
-  destruct b.
-  * discriminate.
-  * exfalso. unfold not in H3. apply H3 in H2. apply H2.
-  * intro H3. discriminate.
-Qed.
-
-Lemma eq_event_prop : forall n m, reflect (n = m) (eq_event n m).
-Proof.
-  intros n m. apply iff_reflect. split.
-- apply eq_event_iff_eq.
-- apply eq_event_iff_eq.
+Definition eq_event_dec (e1 e2 : EventType) : {e1 = e2}+{~(e1=e2)}.
+Proof. destruct (eqb_event e1 e2) eqn:Heqn.
+- left. destruct e1 ; destruct e2; try reflexivity ; try discriminate Heqn.
+- right. destruct e1 ; destruct e2 ;  intro H ; try  discriminate Heqn ; try discriminate H.
 Qed.
 
 Definition Trace := List.list EventType % type.
@@ -98,6 +52,71 @@ Notation "c0 _;_ c1"  := (CSeq c0 c1)
 Notation "c0 _+_ c1"  := (CPlus c0 c1)
                          (at level 61, left associativity).
 
+
+Fixpoint eqb_contract (c0 c1 : Contract) : bool :=
+match c0,c1 with
+| Success, Success => true
+| Failure, Failure => true
+| (Event e), (Event e') => eqb_event e e'
+| (CPlus c0 c1), (CPlus c2 c3) => (eqb_contract c0 c2) && (eqb_contract c1 c3)
+| (CSeq c0 c1), (CSeq c2 c3) => (eqb_contract c0 c2) && (eqb_contract c1 c3)
+| _, _ => false
+end.
+
+(*
+Lemma contract_or : forall (c0 c1 : Contract), c0 = c1 \/ c0 <> c1.
+Proof.
+induction c0.
+- destruct c1 ; try (left ; reflexivity) ; try (right ; intro H ; discriminate).
+- destruct c1 ; try (left ; reflexivity) ; try (right ; intro H ; discriminate).
+- destruct c1 ; try (left ; reflexivity) ; try (right ; intro H ; discriminate).
+  * destruct e; destruct e0; try (left; apply f_equal ; reflexivity). try (right ; intro H ; discriminate).
+    ** right. intro H ; discriminate.
+- induction c1. *)
+
+Search (_ && _).
+Lemma eqb_contract_true : forall (c0 c1 : Contract), eqb_contract c0 c1 = true -> c0 = c1.
+Proof.
+induction c0. 
+- destruct c1 ; intros ; try reflexivity ; try (simpl in H ; try discriminate).
+- intros ;  destruct c1; try reflexivity; (try simpl in H ; discriminate).
+- intros. destruct c1; try reflexivity; (try simpl in H ; try discriminate).
+  apply f_equal. destruct e; destruct e0 ; try reflexivity ; try (simpl in H ; discriminate).
+- induction c1 ; intros ; try discriminate.
+  * simpl in H. apply andb_prop in H as [H1 H2].
+    apply IHc0_1 in H1. rewrite H1. apply IHc0_2 in H2.  rewrite H2.  reflexivity. 
+- induction c1 ; intros ; try discriminate. simpl in H.
+  * simpl in H. apply andb_prop in H as [H1 H2].
+    apply IHc0_1 in H1. rewrite H1. apply IHc0_2 in H2.  rewrite H2.  reflexivity. 
+Defined.
+
+Lemma eqb_contract_false : forall (c0 c1 : Contract), eqb_contract c0 c1 = false -> c0 <> c1.
+Proof.
+induction c0.
+- destruct c1 ; intros ; try discriminate.
+- destruct c1 ; intros ; try discriminate.
+- destruct c1 ; intros ; try discriminate.
+  * destruct e; destruct e0 ; try reflexivity ; try (simpl in H ; discriminate).
+- induction c1 ; intros ; try discriminate.
+  * simpl in H. apply andb_false_elim in H as [H1 | H1].
+    ** apply IHc0_1 in H1. intro H. inversion H. contradiction.
+    ** apply IHc0_2 in H1. intro H. inversion H. contradiction. 
+- induction c1 ; intros ; try discriminate.
+  * simpl in H. apply andb_false_elim in H as [H1 | H1].
+    ** apply IHc0_1 in H1. intro H. inversion H. contradiction.
+    ** apply IHc0_2 in H1. intro H. inversion H. contradiction.  
+Defined.
+
+
+
+Definition eq_contract_dec : forall (c0 c1: Contract), {c0=c1} + {c0<>c1}.
+Proof.
+intros. destruct (eqb_contract c0 c1) eqn:Heqn.
+- left. apply eqb_contract_true. assumption.
+- right. apply eqb_contract_false. assumption.
+Defined.
+ 
+
 (*For a nullary contract c, nu c = true*)
 Fixpoint nu(c:Contract):bool :=
 match c with
@@ -108,18 +127,13 @@ match c with
 | c0 _+_ c1 => nu c0 || nu c1
 end.
 
-Definition is_failure (c : Contract) :=
-match c with
-| Failure => true
-| _ => false
-end.
 
 (*Derivative of contract with respect to an event*)
 Fixpoint derive(e:EventType)(c:Contract):Contract :=
 match c with
 | Success => Failure
 | Failure => Failure
-| Event e1 => if eq_event e1 e then Success else Failure
+| Event e1 => if eq_event_dec e1 e then Success else Failure
 | c0 _;_ c1 => match nu c0 with
                | true => ((derive e c0) _;_ c1) _+_ (derive e c1)
                | false => (derive e c0) _;_ c1
@@ -138,10 +152,8 @@ end.
 (*Expression*)
 Notation "s =~ c" := (matches c s) (at level 63).
 
-
-
 (** Relation between [matches] and [derive]. *)
-Theorem derivation : forall (e:EventType)(s:Trace)(c:Contract),
+Theorem derive_spec : forall (e:EventType)(s:Trace)(c:Contract),
   (e::s) =~ c  = s =~ c / e.
 Proof. intros e s c. simpl. reflexivity.
 Qed.
@@ -163,25 +175,11 @@ Inductive matches_comp : Trace -> Contract -> Prop :=
               : s2 ==~ (c1 _+_ c2)
   where "s ==~ c" := (matches_comp s c).
 
+Hint Constructors matches_comp : core.
 
-Lemma is_failure_true : forall c0 : Contract, is_failure c0 = true -> c0 = Failure.
+Lemma failure_false2 : forall (s : Trace), ~(s ==~ Failure).
 Proof.
-intros c0 H. induction c0.
-- discriminate H.
-- reflexivity.
-- discriminate H.
-- discriminate H.
-- discriminate H.
-Qed.
-
-Lemma is_failure_false : forall c0 : Contract, is_failure c0 = false -> c0 <> Failure.
-Proof.
-intros c0 H. induction c0.
-- intuition ; discriminate.
-- discriminate.
-- (intuition ; discriminate).
-- (intuition ; discriminate).
-- (intuition ; discriminate).
+intros. intro H. inversion H.
 Qed.
 
 (*No trace can be derived from Failure*)
@@ -189,156 +187,92 @@ Lemma failure_false : forall (s : Trace), (s =~ Failure) = false.
 Proof. induction s.
 - simpl. reflexivity.
 - simpl. apply IHs.
-Qed.
+Defined.
 
-Lemma remove_failure : forall (s : Trace)(c : Contract), s =~ (Failure _+_ c) = true -> s =~ c = true.
-Proof. induction s.
-- intros c H. simpl. simpl in H. apply H.
-- intros c H. simpl in H. simpl. apply IHs. apply H.
-Qed.
-
-Lemma add_failure : forall (s : Trace)(c : Contract), s =~ c = true -> s =~ (Failure _+_ c) = true .
-Proof. induction s.
-- intros c H. simpl. simpl in H. apply H.
-- intros c H. simpl. simpl in H. apply IHs. apply H. 
-Qed.
-
-(*Helper lemma reflecting change in derive function*)
-Lemma plus_if : forall (s : Trace)(c0 c1 : Contract), 
-s =~ (c0 _+_ c1) = true -> s =~ (if is_failure c0 then c1 else (c0 _+_ c1)) = true.
-Proof.
-intros s c0. generalize dependent s. induction c0.
-- intros s c1 H. simpl. apply H.
-- intros s c1 H. simpl. apply remove_failure in H. apply H.
-- intros s c1 H. simpl. apply H.
-- intros s c1 H. simpl. apply H.
-- intros s c1 H. simpl. apply H.
-Qed. 
-
-
-(*Helper lemma reflecting change in derive function*)
-Lemma if_plus : forall (s : Trace)(c0 c1 : Contract), 
-s =~ (if is_failure c0 then c1 else (c0 _+_ c1)) = true -> s =~ (c0 _+_ c1) = true.
-Proof.
-intros s c0. generalize dependent s. induction c0.
-- intros s c1 H. simpl in H. apply H.
-- intros s c1 H. simpl in H. apply add_failure. apply H.
-- intros s c1 H. simpl in H. apply H.
-- intros s c1 H. simpl in H. apply H.
-- intros s c1 H. simpl in H. apply H.
-Qed. 
-
-Lemma failure_or_not : forall (c : Contract), c = Failure \/ c <> Failure.
-Proof.
-induction c.
-- right. unfold not. intro H. discriminate.
-- left. reflexivity.
-- right. unfold not. intro H. discriminate.
-- right. unfold not. intro H. discriminate.
-- right. unfold not. intro H. discriminate.
-Qed.
 
 (*If s matches c, it also matches c _+_ any contract*)
 Lemma plus_left_oper : forall (s : Trace)(l r : Contract), s =~ l = true -> s =~ (l _+_ r) = true.
-Proof. intros s. induction s as [| n s' IHs'].
+Proof. induction s as [| n s' IHs'].
 - intros l r H. simpl in H. simpl. rewrite H. rewrite orb_true_l. reflexivity.
-- simpl. intros l r H. apply IHs'. apply H.
+- simpl. intros l r H. auto. 
 Qed. 
 
 (*_+_ is commutative*)
 Lemma plus_comm_oper : forall (s : Trace)(l r : Contract), s =~ (l _+_ r) = true -> s =~ (r _+_ l) = true.
 Proof. induction s as [| e s' IHs'].
 - simpl. intros l r H. rewrite orb_comm. apply H.
-- intros l r H. simpl. apply IHs'. simpl in H. apply H.
+- intros l r H. simpl. auto.
 Qed.
  
 (*If s matches c, it also matches any contract _+_ c*)
 Lemma plus_right_oper : forall (s : Trace)(l r : Contract), s =~ r = true -> s =~ (l _+_ r) = true.
-Proof. intros s l r H. apply plus_comm_oper. apply plus_left_oper. apply H.
+Proof. intros. apply plus_comm_oper. apply plus_left_oper. apply H.
 Qed.
 
 (*If s matches c2, it will still match after prefixing c2 with a nullary contract*)
 Lemma seq_nu_left : forall (s : Trace)(c1 c2 : Contract), nu c1 = true -> (s =~c2 = true) 
                     -> (s =~ c1 _;_ c2 = true).
 Proof. induction s as [| e s' IHs'].
-- intros c1 c2 H1 H2. unfold matches. simpl. simpl in H2. apply andb_true_intro.
-  split.
-  * apply H1.
-  * apply H2.
-- intros c1 c2 H1 H2. simpl. rewrite H1. simpl in H2. apply plus_right_oper. apply H2.
+- intros. simpl in *. apply andb_true_intro. auto.
+- intros. simpl in *. rewrite H. apply plus_right_oper. assumption.
 Qed.
 
 (*MSeq defined operationally*)
 Lemma mseq_oper : forall (s1 s2 : Trace)(c1 c2 : Contract), s1 =~ c1 = true -> 
                       s2 =~ c2 = true -> ((s1 ++ s2) =~ c1 _;_ c2) = true.
-Proof. induction s1 as [| e s1' IHs1'].
-- simpl. intros s2 c1 c2 H1 H2. rewrite <- (app_nil_l s2).
-  apply seq_nu_left.
-  * apply H1.
-  * simpl. apply H2.
-- intros s2 c1 c2 H1 H2. simpl. destruct (nu c1).
-  * simpl in H1. simpl in H1. rewrite <- (app_nil_l (s1' ++ s2)). apply plus_left_oper.
-    simpl. apply IHs1'.
-    ** apply H1.
-    ** apply H2.
-  * apply IHs1'.
-    ** simpl in H1. apply H1.
-    ** apply H2.
+Proof. 
+induction s1.
+- simpl. intros. rewrite <- (app_nil_l s2).
+  apply seq_nu_left ; try assumption.
+- intros. simpl. destruct (nu c1).
+  * simpl in H. rewrite <- (app_nil_l (_ ++ s2)). apply plus_left_oper.
+    simpl. apply IHs1 ; try assumption.
+  * apply IHs1 ; try assumption.
 Qed. 
 
-Lemma comp_imp_oper : forall (s : Trace)(c : Contract), s ==~ c -> (s =~ c) = true.
-Proof. 
-intros s c H. induction H.
-- simpl. reflexivity. (*MSucces*)
-- simpl. rewrite eq_event_refl. reflexivity. (*MChar*)
-- apply mseq_oper. (*MSeq*)
-  * apply IHmatches_comp1.
-  * apply IHmatches_comp2.   
-- apply plus_left_oper. apply IHmatches_comp.  (*MPlusL*)
-- apply plus_right_oper. apply IHmatches_comp. (*MPlusR*)
+Lemma comp_oper : forall (s : Trace)(c : Contract), s ==~ c -> (s =~ c) = true.
+Proof with simpl. 
+intros. induction H.
+- reflexivity.
+- simpl. destruct (eq_event_dec x x). reflexivity. exfalso. now apply n.
+- auto using mseq_oper.
+- auto using plus_left_oper. 
+- auto using plus_right_oper. 
 Qed.
 
 (*If s matches c1 _+_ c2, then it matches c1 or c2*)
 Lemma plus_or_oper : forall (s : Trace)(c1 c2 : Contract), (s =~ (c1 _+_ c2)) = true -> 
                (s =~ c1) = true \/ (s =~ c2) = true.
-Proof. induction s.
-- intros c1 c2 H. simpl. simpl in H. apply orb_prop in H. apply H.
-- intros c1 c2 H. simpl. apply IHs. simpl in H.  apply H.
+Proof. induction s ; simpl ; intros ; auto using orb_prop.
 Qed.
 
 (*Only the empty trace can be derived from Success*)
 Lemma success_empty : forall (s : Trace), (s =~ Success) = true -> s = [].
 Proof. induction s.
-- intro H. reflexivity.
+- intro. reflexivity.
 - simpl. rewrite failure_false. intro H. discriminate.
 Qed.
 
 
-Definition exists_seq_decomp_def (s : Trace) (c1 c2 : Contract) : Prop := 
+Definition exists_seq_decomp (s : Trace) (c1 c2 : Contract) : Prop := 
  s =~ c1 _;_ c2 = true ->
      exists s1 s2 : Trace, s = s1 ++ s2 /\ s1 =~ c1 = true /\ s2 =~ c2 = true.
+Hint Unfold exists_seq_decomp : core.
 
 (*To show e::s matching c1 _;_ c2 can be decomposed, it suffices to show 
   s matching c1/e ;_ c2 can be decomposed*)
 Lemma mseq_oper_inv_helper : forall (s : Trace)(c1 c2 : Contract)(e : EventType), 
-  (exists_seq_decomp_def s (c1 / e) c2) -> exists_seq_decomp_def (e :: s) c1 c2.
+  (exists_seq_decomp s (c1 / e) c2) -> exists_seq_decomp (e :: s) c1 c2.
 Proof.
-unfold exists_seq_decomp_def. intros s c1 c2 e H1 H2. simpl in H2. destruct (nu c1) eqn:Heqn.
-- apply plus_or_oper in H2 as H2. destruct H2 as [H2 | H2].
-  * apply H1 in H2. destruct H2 as [s' [s'' [P1 [P2 P3]]]].
-    exists (e::s'). exists s''. simpl. rewrite P1. split.
-    ** reflexivity.
-    ** split. 
-      *** apply P2.
-      *** apply P3.
-  * exists []. exists (e::s). simpl. split.
-    ** reflexivity.
-    ** split. { apply Heqn. } { apply H2. }
-- apply H1 in H2. destruct H2 as [s' [s'' [P1 [P2 P3]]]]. exists (e::s'). exists s''. split.
+unfold exists_seq_decomp. intros. simpl in *. destruct (nu c1) eqn:Heqn.
+- apply plus_or_oper in H0. destruct H0 as [H2 | H2].
+  * apply H in H2. destruct H2 as [s' [s'' [P1 [P2 P3]]]].
+    exists (e::s'). exists s''. simpl. rewrite P1. split ; try reflexivity ; auto.
+  * exists []. exists (e::s). simpl ; try reflexivity ; auto. 
+- apply H in H0. destruct H0 as [s' [s'' [P1 [P2 P3]]]]. exists (e::s'). exists s''. 
+  split.
   * simpl. rewrite <- P1. reflexivity.
-  * split.
-    ** simpl. apply P2.
-    ** apply P3.
+  * split ; auto.
 Qed.
 
 
@@ -348,33 +282,27 @@ Qed.
 Lemma mseq_oper_inv : forall (s : Trace)(c1 c2 : Contract), 
        (s =~ c1 _;_ c2) = true -> (exists (s1 s2 : Trace), s = s1++s2 /\ (s1 =~ c1) = true /\ (s2 =~ c2) = true ).
 Proof. induction s.
-- intros c1 c2 H. exists []. exists []. simpl. simpl in H. apply andb_prop in H as [H1 H2].
-  rewrite H1. rewrite H2. split.
-  * reflexivity.
-  * split.
-    ** reflexivity.
-    ** reflexivity.
-- intros c1 c2 H. apply mseq_oper_inv_helper.
-  * unfold exists_seq_decomp_def. intros H2. apply IHs. apply H2.
-  * apply H.
+- intros. exists []. exists []. simpl in *. apply andb_prop in H as [H1 H2].
+  rewrite H1. rewrite H2. repeat split ; try reflexivity.
+- intros. apply mseq_oper_inv_helper ; auto. 
 Qed.
 
 Lemma oper_imp_comp : forall (s : Trace)(c : Contract), (s =~ c) = true -> s ==~ c.
 Proof.
-intros s c. generalize dependent s. induction c.
-- intros s H. destruct s. (*Success*)
-  * apply MSuccess.
+intros. generalize dependent s. induction c.
+- intros. destruct s ; try constructor.
   * inversion H. rewrite failure_false in H1. discriminate H1.
-- intros s H. rewrite failure_false in H. discriminate H. (*Failure*)
-- intros s H. destruct s eqn:Heqn. (*Event e*)
+- intros. rewrite failure_false in H. discriminate H. 
+- intros. destruct s eqn:Heqn.
   * inversion H.
-  * simpl in H. destruct (eq_event_prop e e0). (*reflection*)
-    ** apply success_empty in H. rewrite H0. rewrite H. apply MEvent.
+  * simpl in H. destruct (eq_event_dec e e0).
+    ** destruct t. apply success_empty in H. subst. apply MEvent. simpl in H. 
+       rewrite failure_false in H. discriminate H.
     ** rewrite failure_false in H. discriminate H.
-- intros s H. apply plus_or_oper in H. destruct H. (*c1 _+_ c2*)
+- intros. apply plus_or_oper in H. destruct H.
   * apply MPlusL. apply IHc1. apply H.
   * apply MPlusR. apply IHc2. apply H.
-- intros s H. apply mseq_oper_inv in H as [s' [s'' [P1 [P2 P3]]]]. (*c1 _;_ c2*)
+- intros s H. apply mseq_oper_inv in H as [s' [s'' [P1 [P2 P3]]]].
   rewrite P1. apply MSeq.
   * apply (IHc1 s' P2).
   * apply (IHc2 s'' P3). 
@@ -383,24 +311,21 @@ Qed.
 Lemma comp_iff_oper : forall (s : Trace)(c : Contract), s ==~ c <-> (s =~ c) = true.
 Proof.
 split.
-- (*->*) apply comp_imp_oper.
+- (*->*) apply comp_oper.
 - (*<-*) apply oper_imp_comp.
 Qed.
 
-(*the boolean value s =~ c is reflected in the proposition s ==~ c *)
-Lemma matches_prop : forall (s : Trace) (c : Contract), reflect (s ==~ c) (s =~ c).
+(*the proposition s ==~ c is reflected in the value s =~ c *)
+Lemma matches_reflect : forall (s : Trace) (c : Contract), reflect (s ==~ c) (s =~ c).
 Proof.
-  intros n m. apply iff_reflect. split.
-- apply comp_iff_oper.
-- apply comp_iff_oper.
+  intros n m. destruct (n =~ m) eqn:Heqn.
+  - apply ReflectT. apply oper_imp_comp. assumption. 
+  - apply ReflectF. intro H. apply comp_oper in H. rewrite Heqn in H. inversion H.
 Qed.
 
 
 Definition c_eq (c c':Contract) : Prop := forall s, s ==~ c <-> s ==~ c'.
 Notation "a =R= b" := (c_eq a b) (at level 70).
-
-Definition c_le (c c':Contract) : Prop := forall s, s ==~ c -> s ==~ c'.
-Notation "a <R= b" := (c_le a b) (at level 70).
 
 Lemma c_eq_refl : reflexive Contract c_eq.
 Proof.
@@ -430,92 +355,52 @@ Add Parametric Relation : Contract c_eq
   transitivity proved by c_eq_trans
   as Contract_setoid.
 
-(*Algebraic properties *)
 
-Lemma plus_comm_le : forall (c1 c2 : Contract), (c1 _+_ c2) <R= (c2 _+_ c1).
-Proof.
-- intros c1 c2 s H. inversion H.
-  * apply MPlusR. apply H2.
-  * apply MPlusL. apply H1.
-Qed. 
+(*Algebraic properties *)
 
 Lemma plus_comm : forall (c1 c2 : Contract), (c1 _+_ c2) =R= (c2 _+_ c1).
 Proof.
-split.
-- apply plus_comm_le.
-- apply plus_comm_le.
+split ; intros ; inversion H ; auto.
 Qed.
 
 Lemma plus_assoc : forall (c1 c2 c3 : Contract), ((c1 _+_ c2) _+_ c3) =R= (c1 _+_ (c2 _+_ c3)).
 Proof.
 split.
 - intro H. inversion H.
-  * inversion H2.
-    ** apply MPlusL. apply H6.
-    ** apply MPlusR. apply MPlusL. apply H6.
-  * apply MPlusR. apply MPlusR. apply H1.
+  * inversion H2 ; auto. 
+  * auto.
 - intro H. inversion H.
-  * inversion H2.
-    ** apply MPlusL. apply MPlusL. apply MSuccess.
-    ** apply MPlusL. apply MPlusL. apply MEvent.
-    ** apply MPlusL. apply MPlusL. apply MSeq.
-      *** apply H4.
-      *** apply H5.
-    ** apply MPlusL. apply MPlusL. apply MPlusL. apply H4.
-    ** apply MPlusL. apply MPlusL. apply MPlusR. apply H4.
-  * inversion H1.
-    ** apply MPlusL. apply MPlusR. apply H6.
-    ** apply MPlusR. apply H6.
+  * inversion H2 ; auto.
+  * inversion H1 ; auto.
 Qed.
 
-Search (_ ++ _ = _).
 
 Lemma seq_assoc : forall (c1 c2 c3 : Contract), ((c1 _;_ c2) _;_ c3) =R= (c1 _;_ (c2 _;_ c3)).
 Proof.
 split.
-- intro H. inversion H. inversion H3. rewrite <- app_assoc. apply MSeq.
-  * apply H8.
-  * apply MSeq.
-    ** apply H9.
-    ** apply H4.
-- intro H. inversion H. inversion H4. rewrite -> app_assoc. apply MSeq.
-  * apply MSeq.
-    ** apply H3.
-    ** apply H8.
-  * apply H9.
+- intros. inversion H. inversion H3. rewrite <- app_assoc. all : auto.
+- intro H. inversion H. inversion H4. rewrite -> app_assoc. all : auto. 
 Qed.
 
 Lemma plus_or : forall (s : Trace)(c1 c2 : Contract), s ==~ (c1 _+_ c2) <-> s ==~ c1 \/ s ==~c2.
 Proof. 
 split.
-- intros. repeat rewrite comp_iff_oper in *.
-apply plus_or_oper in H. apply H.
-- intros. destruct H. { now apply MPlusL. } { now apply MPlusR. }
+- intros. repeat rewrite comp_iff_oper in *. 
+apply plus_or_oper in H. assumption.
+- intros. destruct H; auto.
 Qed.
 
 
 Lemma plus_distr : forall (c1 c2 c3 : Contract), (c1 _;_ (c2 _+_ c3)) =R= (c1 _;_ c2) _+_ (c1 _;_ c3).
 Proof. split.
-- intro H. inversion H. inversion H4.
-  * apply MPlusL. apply MSeq. { apply H3. } { apply H7. }
-  * apply MPlusR. apply MSeq. { apply H3. } { apply H7. }
-- intro H. apply plus_or in H as [H | H].
-  * inversion H. apply MSeq.
-    ** apply H3.
-    ** apply MPlusL. apply H4.
-  * inversion H. apply MSeq.
-    ** apply H3.
-    ** apply MPlusR. apply H4.
+- intros. inversion H ; inversion H4 ; auto.
+- intros. apply plus_or in H as [H | H] ; inversion H ; auto.
 Qed.
 
 Lemma plus_distr2 : forall (c1 c2 c3 : Contract), ((c1 _+_ c2) _;_ c3) =R= (c1 _;_ c3) _+_ (c2 _;_ c3).
 Proof. split.
-- intros H. inversion H. inversion H3.
-  * apply MPlusL. apply MSeq. { apply H7. } { apply H4. }
-  * apply MPlusR. apply MSeq. { apply H7. } { apply H4. }
-- intros H. inversion H.
-  * inversion H2. apply MSeq. { apply MPlusL. apply H7. } { apply H8. }
-  * inversion H1. apply MSeq. { apply MPlusR. apply H7. } { apply H8. }
+- intros ; inversion H ; inversion H3 ; auto.
+- intros ; inversion H ; try inversion H2 ; try inversion H1 ; auto.
 Qed.
 
 (*Parallel contracts section*)
@@ -535,8 +420,9 @@ Notation "c0 -*- c1"  := (PPar c0 c1)
 Notation "c0 -+- c1"  := (PPlus c0 c1)
                          (at level 61, left associativity).
 
+
 (*Taken from csl-formalization*)
-Inductive interleave : Trace -> Trace -> Trace -> Prop :=
+Inductive interleave (A : Set) : list A -> list A -> list A -> Prop :=
 | IntLeftNil  : forall t, interleave nil t t
 | IntRightNil : forall t, interleave t nil t
 | IntLeftCons : forall t1 t2 t3 e, interleave t1 t2 t3 -> interleave (e :: t1) t2 (e :: t3)
@@ -578,18 +464,74 @@ match c with
 | Event e => Event e
 | c0 _;_ c1 => let c0' := norm c0
                in let c1' := norm c1
-                  in if (is_failure c0') || is_failure c1'
-                       then Failure
-                       else c0' _;_ c1'
+                  in if (eq_contract_dec c0' Failure) then Failure
+                     else if (eq_contract_dec c1' Failure ) then Failure
+                     else c0' _;_ c1'
 | c0 _+_ c1 => let c0' := norm c0
                in let c1' := norm c1
-                  in if (is_failure c0') 
-                       then c1'
-                       else if (is_failure c1') 
-                              then c0'
-                              else c0' _+_ c1'
+                  in if (eq_contract_dec c0' Failure) then c1'
+                     else if (eq_contract_dec c1' Failure ) then c0'
+                     else c0' _+_ c1'
 end.
                            
+
+Lemma norm_idempotent : forall (c : Contract), norm (norm c) = norm c.
+Proof.
+induction c ; simpl ; try reflexivity;
+destruct (eq_contract_dec (norm c1) Failure) ; try assumption.
+destruct (eq_contract_dec (norm c2) Failure) ; try assumption.
+simpl. destruct (eq_contract_dec (norm (norm c1)) Failure).
+  * rewrite <- IHc1 in n. contradiction.
+  * destruct (eq_contract_dec (norm (norm c2))).
+    ** rewrite <- IHc2 in n0. contradiction.
+    ** rewrite IHc1. rewrite IHc2. reflexivity.
+  * reflexivity.
+  * destruct (eq_contract_dec (norm c2) Failure) ; try reflexivity.
+    ** simpl. destruct (eq_contract_dec (norm (norm c1)) Failure).
+      *** rewrite IHc1 in e. contradiction.
+      *** destruct (eq_contract_dec (norm (norm c2))). 
+        **** rewrite IHc2 in e. contradiction.
+        **** rewrite IHc1. rewrite IHc2. reflexivity.
+Qed.
+
+Lemma match_closed_norm : forall (s : Trace)(c : Contract), s ==~ c <-> s ==~ (norm c).
+Proof.
+split.
+- intros. induction H ; simpl ; try constructor.
+  * destruct (eq_contract_dec (norm c1) Failure).
+    ** rewrite e in IHmatches_comp1. inversion IHmatches_comp1.
+    ** destruct (eq_contract_dec (norm c2) Failure).
+      *** rewrite e in IHmatches_comp2. inversion IHmatches_comp2.
+      *** constructor ; assumption.
+  * destruct (eq_contract_dec (norm c1) Failure).
+    ** rewrite e in IHmatches_comp. inversion IHmatches_comp.
+    ** destruct (eq_contract_dec (norm c2) Failure).
+      *** assumption.
+      *** apply MPlusL. assumption.
+  * destruct (eq_contract_dec (norm c1) Failure).
+    ** assumption.
+    ** destruct (eq_contract_dec (norm c2) Failure).
+      *** rewrite e in IHmatches_comp. inversion IHmatches_comp.
+      *** apply MPlusR. assumption.
+- Admitted.
+
+Lemma norm_failure_equivalence : forall (c : Contract), norm c = Failure ->
+(forall (s : Trace), ~(s ==~ c)).
+Proof.
+induction c ; try (intros ; discriminate).
+- intros. intro H2. inversion H2.
+- intros. intro H2. simpl in H. destruct (eq_contract_dec (norm c1) Failure).
+  * apply IHc1 with(s:=s) in e. apply IHc2 with (s:=s) in H. 
+    apply plus_or in H2 as [H2 | H2] ; contradiction.
+  * destruct (eq_contract_dec (norm c2) Failure). 
+    ** contradiction. 
+    ** discriminate H. 
+- intros. intro H2. simpl in H. destruct (eq_contract_dec (norm c1) Failure).
+  * inversion H2. apply IHc1 with(s:=s1) in e. contradiction.
+  * destruct (eq_contract_dec (norm c2) Failure). 
+    ** inversion H2. apply IHc2 with (s:=s2) in e. contradiction. 
+    ** discriminate.
+Qed.
 
 (*A safe contract has a smaller derivative*)
 Inductive safe : Contract -> Prop :=
@@ -597,55 +539,48 @@ Inductive safe : Contract -> Prop :=
 | SAEvent e : safe (Event e)
 | SASeq c1 c2 (H1 : safe c1) (H2 : safe c2) : safe (c1 _;_ c2)
 | SAPlus c1 c2 (H1 : safe c1) (H2 : safe c2) : safe (c1 _+_ c2).
+Hint Constructors safe : core.
 
-
-Lemma is_failure_not_safe : forall (c : Contract), is_failure (norm c) = true -> ~(safe (norm c)).
-Proof. 
-intros c H. apply is_failure_true in H. rewrite H. intro H2. inversion H2.
-Qed.
-
-
-Lemma norm_not_failure_plus : forall (c1 c2 : Contract), (is_failure (norm c1) = false -> safe (norm c1)) -> 
-(is_failure (norm c2) = false -> safe (norm c2)) -> is_failure (norm (c1 _+_ c2)) = false -> safe (norm c1) \/ safe (norm c2).
-Proof. 
-intros c1 c2 H0 H1 H2. simpl in H2. destruct (is_failure (norm c1)) eqn:Heqn.
-- right. apply H1. apply H2.
-- destruct (is_failure (norm c2)) eqn:Heqn2.
-  * left. apply H0. reflexivity.
-  * left. apply H0. reflexivity.
-Qed.
-
-Lemma norm_not_failure_seq : forall (c1 c2 : Contract), (is_failure (norm c1) = false -> safe (norm c1)) -> 
-(is_failure (norm c2) = false -> safe (norm c2)) ->
-   is_failure (norm (c1 _;_ c2)) = false -> safe (norm c1) /\ safe (norm c2).
+Lemma failure_not_safe : forall (c : Contract), (norm c) = Failure -> ~(safe (norm c)).
 Proof.
-intros c1 c2 H0 H1 H2. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn.
-- simpl in H2. rewrite Heqn in H2. simpl in H2. inversion H2.
-- simpl in H2. rewrite Heqn in H2. apply orb_false_iff in Heqn as [Heqn1 Heqn2].
-  split. { apply H0. apply Heqn1. } { apply H1. apply Heqn2. }
+intros. intro H'. inversion H' ; try (rewrite H in H1 ; discriminate H1).
 Qed.
 
-Lemma norm_not_failure_imp_safe : forall (c : Contract), is_failure (norm c) = false -> safe (norm c).
+Lemma safe_not_failure : forall (c : Contract),  (safe (norm c)) -> (norm c) <> Failure.
 Proof.
-induction c.
-- intro H. apply SASuccess.
-- intro H. simpl in H. inversion H.
-- intro H. apply SAEvent.
-- intro H. pose proof (norm_not_failure_plus _ _ IHc1 IHc2). simpl. destruct (is_failure (norm c1)) eqn:Heqn1.
-  * apply is_failure_not_safe in Heqn1. apply H0 in H as [H | H].
-    ** contradiction.
-    ** auto.
-  * destruct (is_failure (norm c2)) eqn:Heqn2.
-    ** apply H0 in H as [H | H].
-      *** apply H.
-      *** auto.
-    ** apply SAPlus. { auto. } { auto. }
-- intro H. simpl. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn.
-  * apply (norm_not_failure_seq _ _ IHc1 IHc2) in H as [H1 H2]. apply orb_true_iff in Heqn as [Heqn | Heqn].
-    ** apply is_failure_not_safe in Heqn. contradiction.
-    ** apply is_failure_not_safe in Heqn. contradiction.
-  * apply orb_false_iff in Heqn as [Heqn1 Heqn2]. apply SASeq. { apply IHc1. apply Heqn1. } { apply IHc2. apply Heqn2. } 
-Qed. 
+intros. induction H ; discriminate.
+Qed.
+
+
+(*
+Lemma not_safe_is_failure : forall (c : Contract), ~(safe (norm c)) -> (norm c) = Failure.
+Proof.
+intros. induction c ; try (simpl in H; exfalso; apply H; constructor).
+- reflexivity.
+- s H. intro H'. inversion H' ; try (rewrite H in H1 ; discriminate H1).
+Qed.*)
+
+
+Lemma norm_not_failure_plus : forall (c1 c2 : Contract), (norm c1 <> Failure -> safe (norm c1)) -> 
+(norm c2 <> Failure -> safe (norm c2)) -> norm (c1 _+_ c2) <> Failure -> safe (norm c1) \/ safe (norm c2).
+Proof. 
+intros. simpl in H1. 
+destruct (eq_contract_dec (norm c1) Failure).
+  - right. auto.
+  - left. auto.
+Qed.
+
+Lemma norm_not_failure_seq : forall (c1 c2 : Contract), (norm c1 <> Failure -> safe (norm c1))  -> 
+(norm c2 <> Failure -> safe (norm c2)) -> (norm (c1 _;_ c2)) <> Failure -> safe (norm c1) /\ safe (norm c2).
+Proof.
+intros. simpl in H1. destruct (eq_contract_dec (norm c1) Failure).
+  - contradiction.
+  - destruct (eq_contract_dec (norm c2) Failure).
+    * contradiction.
+    * split ; auto.
+Qed.
+
+
 
 Lemma size_ge_1 : forall (c : Contract), 1 <= con_size c.
 Proof. induction c.
@@ -657,20 +592,37 @@ Proof. induction c.
   { intuition. } { intuition. }
 Qed.
 
-
+Hint Resolve size_ge_1 : core.
 
 Lemma mult_two_contracts_ge1 : forall (c1 c2 : Contract), 1 <= con_size c1 * con_size c2.
 Proof.
-intros. rewrite <- Nat.mul_1_l at 1. apply Nat.mul_le_mono. { apply size_ge_1. } { apply size_ge_1. }
+intros. rewrite <- Nat.mul_1_l at 1. apply Nat.mul_le_mono ; auto.
+Qed.
+
+Lemma not_failure_imp_safe : forall (c : Contract), (norm c) <> Failure -> safe (norm c).
+Proof.
+induction c; try (intros ; simpl ; auto) ; try contradiction.
+- destruct (eq_contract_dec (norm c1) Failure) eqn:Heqn.
+  * apply IHc2. destruct (eq_contract_dec (norm c2) Failure) eqn:Heqn2.
+    ** simpl in H.  rewrite Heqn in H. contradiction.
+    ** auto.
+  * destruct (eq_contract_dec (norm c2) Failure) eqn:Heqn2.
+    ** auto.
+    ** constructor ; auto.
+- destruct (eq_contract_dec (norm c1) Failure) eqn:Heqn.
+  * simpl in H. rewrite Heqn in H. contradiction.
+  * destruct (eq_contract_dec (norm c2) Failure) eqn:Heqn2.
+    ** simpl in H. rewrite Heqn2 in H. rewrite Heqn in H. contradiction.
+    ** auto.
 Qed.
 
 Lemma safe_le : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) <= (con_size c) - 1.
 Proof. 
 intros c H. induction H.
 - intuition.
-- intuition. simpl. destruct (eq_event e e0). { intuition. } { intuition. } 
+- intuition. simpl. destruct (eq_event_dec e e0) ; auto.
 - intro e. simpl. destruct (nu c1) eqn:Heqn.
-  * simpl. specialize IHsafe1 with e. specialize IHsafe2 with e.
+  * simpl. specialize IHsafe1 with e. specialize IHsafe2 with e. 
     transitivity ((con_size c1 - 1) * con_size c2 + (con_size c2 - 1)).
     ** apply Nat.add_le_mono. { apply Mult.mult_le_compat_r. intuition. } { intuition. }
     ** rewrite Nat.mul_sub_distr_r. simpl. rewrite Nat.add_0_r. rewrite Nat.add_comm. 
@@ -694,7 +646,7 @@ Qed.
 
 Lemma safe_lt : forall (c : Contract), safe c -> forall (e : EventType), con_size (c / e) < (con_size c).
 Proof.
-intros c H e. pose proof (safe_le c H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_1 c)) in H0.
+intros c H e. pose proof (safe_le H e). apply Lt.le_lt_n_Sm in H0. rewrite (Minus.minus_Sn_m _ _ (size_ge_1 c)) in H0.
 rewrite Nat.sub_succ in H0. rewrite Nat.sub_0_r in H0. apply H0. 
 Qed.
 
@@ -707,45 +659,66 @@ induction c.
 - simpl. reflexivity.
 - simpl. reflexivity.
 - simpl. reflexivity.
-- simpl. destruct (is_failure (norm c1)) eqn:Heqn1.
-  * lia. 
-  * destruct (is_failure (norm c2)) eqn:Heqn2.
+- simpl. destruct (eq_contract_dec (norm c1) Failure).
+  * lia.
+  * destruct (eq_contract_dec (norm c2) Failure). 
     ** lia.
-    ** simpl. apply Nat.add_le_mono.  {lia. } { lia. }
-- simpl. destruct (is_failure (norm c1) || is_failure (norm c2)) eqn:Heqn1.
-  * simpl.  destruct Heqn1. apply mult_two_contracts_ge1.
-  * simpl. apply Nat.mul_le_mono. { apply IHc1. } { apply IHc2. }
+    ** simpl. lia.
+- simpl. destruct (eq_contract_dec (norm c1) Failure).
+  * simpl. apply mult_two_contracts_ge1.
+  * destruct (eq_contract_dec (norm c2) Failure).
+    ** apply mult_two_contracts_ge1.
+    ** simpl. apply Nat.mul_le_mono ; auto.
 Qed.
+
 
 Lemma times_termination : forall (c0 c1 : Contract)(e : EventType), 
-is_failure (norm c0) || is_failure (norm c1) = false ->
-con_size (norm c0 / e) + con_size (norm c1) < con_size c0 + con_size c1.
+norm c0 <> Failure -> (norm c1) <> Failure -> con_size (norm c0 / e) + con_size (norm c1) < con_size c0 + con_size c1.
 Proof.
-intros. apply orb_false_elim in H as [H1 H2].
-apply norm_not_failure_imp_safe in H1. apply norm_not_failure_imp_safe in H2. 
+intros. apply not_failure_imp_safe in H. apply not_failure_imp_safe in H0. 
 apply (Nat.lt_le_trans _ (con_size (norm c0) + con_size (norm c1)) _).
-- apply Nat.add_lt_le_mono. { apply (safe_lt (norm c0) H1). } { reflexivity. }
-- apply Nat.add_le_mono. { apply norm_le. } { apply norm_le. } 
+- apply Nat.add_lt_le_mono ; auto using (safe_lt H).
+- apply Nat.add_le_mono ; apply norm_le.
 Qed.
+(*
+Equations times (c0 : Contract) (c1 : Contract) : (list Contract) by  wf ((con_size (c0)) + (con_size (c1))) lt :=
+times c0 c1 with (norm c0,norm c1) :=
+  times _ _ (Failure, _) := [];
+  times _ _ (_, Failure) := [];
+  times _ _ (Success, c1') := [c1'];
+  times _ _ (c0', Success) := [c0'];
+  times _ _ (c0', c1') := (flat_map (fun e => map (fun c => (Event e) _;_ c) (times (c0' / e) c1' )) alphabet)
+                       ++
+                       (flat_map (fun e => map (fun c => (Event e) _;_ c) (times c0'  (c1'/e ))) alphabet).
+*)
 
-(*unfolding c0 and c1 to simulate a parallel contract, returns a list of contract choices*)
 Equations times (c0 : Contract) (c1 : Contract) : (list Contract) by  wf ((con_size (c0)) + (con_size (c1))) lt :=
   times c0 c1 :=
-if dec (is_failure (norm c0) || is_failure (norm c1))
+        if eq_contract_dec (norm c0) Failure
         then []
+        else if eq_contract_dec (norm c1) Failure
+        then []
+        else if eq_contract_dec (norm c0) Success then [norm c1]
+        else if eq_contract_dec (norm c1) Success then [norm c0]
         else (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0)  / e) (norm c1) )) alphabet)
              ++
              (flat_map (fun e => map (fun c => (Event e) _;_ c) (times (norm c0)  ((norm c1)  /e ))) alphabet).
 Next Obligation.
-apply (times_termination _ _ _ e0).
+apply (times_termination _ _ e) ; assumption.
 Qed.
 Next Obligation.
 rewrite Nat.add_comm. rewrite (Nat.add_comm (con_size c0)). 
-rewrite orb_comm in e0. apply (times_termination _ _ _ e0).
+apply (times_termination _ _ e); assumption.
 Qed.
 Global Transparent times.
+Print eq_contract_dec.
+
+Compute ((times Failure Failure)).
+
+(*Compute (times (Transfer _._ Success) ( Transfer _._ Success)).*)
 
 Definition list_derivative (l : list Contract)(e : EventType) := map (fun c => c / e) l.
+
 
 Equations plus_fold (l : list Contract) : Contract :=
   plus_fold [] := Failure;
@@ -753,21 +726,267 @@ Equations plus_fold (l : list Contract) : Contract :=
 
 Global Transparent plus_fold.
 
+
+Lemma list_derivative_spec : forall (l : list Contract)(e : EventType), (plus_fold l) / e = plus_fold (list_derivative l e).
+Proof. intros. funelim (plus_fold l).
+- reflexivity.
+- simpl. specialize H with e. now rewrite H.
+Qed.
+
+Lemma list_derivative_app : forall (l1 l2 : list Contract)(e : EventType), 
+list_derivative (l1 ++ l2) e = (list_derivative l1 e) ++ (list_derivative l2 e).
+Proof.
+intros. unfold list_derivative. apply map_app.
+Qed.
+
+Search (?a :: ?b = [?a] ++ ?b). 
+
+Search (map (fun _ => map _ _)). 
+
+Lemma plus_failure : forall (s : Trace)(c : Contract), s ==~ c _+_ Failure -> s ==~ c.
+Proof.
+intros. inversion H. assumption. inversion H1.
+Qed.
+
 Lemma plus_fold_app : forall (s:Trace)(l1 l2 : list Contract), 
 s ==~ plus_fold (l1 ++ l2) <-> s ==~ (plus_fold l1) _+_ (plus_fold l2).
+Proof.
+intro. induction l1.
+- intros. split.
+  * intros. simpl in H. apply MPlusR. assumption.
+  * intros. simpl. simpl in H. apply plus_comm in H. apply plus_failure in H. assumption.
+- intros. split.
+  * intros. simpl in *. apply plus_or in H as [H | H]. { apply MPlusL. apply MPlusL. assumption. }
+                                                       { specialize IHl1 with l2. apply IHl1 in H. 
+                                                         apply plus_assoc. apply MPlusR. assumption. } 
+  * intros. simpl in *. apply plus_assoc in H. apply plus_or in H as [H | H].
+    ** apply MPlusL. assumption.
+    ** apply MPlusR. apply IHl1. assumption.
+Qed.
+
+
+Lemma plus_fold_comm : forall (s : Trace)(l1 l2 l : list Contract), interleave l1 l2 l -> s ==~ plus_fold l
+ -> s ==~ plus_fold (l1 ++ l2).
+Proof.
+intros. assert (HA : forall (A:Set) (e : A) (l : list A), e :: l = [e] ++ l). { reflexivity. }
+  induction H ; simpl ; try constructor ; try assumption.
+- rewrite app_nil_r. assumption.
+- rewrite HA in H0 ; apply plus_fold_app in H0 ; rewrite HA ; apply plus_fold_app ;
+  apply plus_or in H0 as [H0 | H0]. apply MPlusL. assumption.
+  * apply MPlusR. apply IHinterleave. assumption.
+- rewrite HA in H0. apply plus_fold_app in H0 ; rewrite HA ; apply plus_fold_app ;
+  apply plus_or in H0 as [H0 | H0].
+  * apply MPlusR. apply plus_fold_app. apply MPlusL. 
+  assumption.
+  * apply IHinterleave in H0. apply plus_fold_app in H0. apply plus_or in H0 as [H0 | H0].
+    ** apply MPlusL. assumption.
+    ** apply MPlusR. apply plus_fold_app. apply MPlusR. assumption.
+Qed.
+
+Lemma flat_map_list_derivative : forall (f: EventType -> list Contract) (l: list EventType)(e : EventType),
+  list_derivative (flat_map f l) e = flat_map (fun x=> list_derivative (f x) e) l.
+Proof. intros. repeat rewrite flat_map_concat_map. repeat unfold list_derivative. 
+rewrite concat_map. rewrite map_map. reflexivity.
+Qed.
+
+
+(*Lemma inline_derivative_l : forall (c0 c1 : Contract)(e' : EventType),
+list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0)  / e) (norm c1) )) alphabet) e' = 
+(flat_map (fun e => map (fun c =>  ((Event e)  _;_ c) / e' ) (times ((norm c0)  / e) (norm c1) )) alphabet).
+Proof.
+intros. rewrite flat_map_list_derivative. 
+unfold list_derivative.
+assert (HA : (fun x => map (fun c : Contract => c / e') (map (fun c : Contract => Event x _;_ c) (times (norm c0 / x) (norm c1)))) =
+             fun x => (map (fun c : Contract => (Event x _;_ c) / e') (times (norm c0 / x) (norm c1)))).
+        { apply functional_extensionality. intros. rewrite map_map. reflexivity.  }
+rewrite HA. reflexivity.
+Qed.*)
+
+
+
+Lemma inline_derivative_l : forall (c0 c1 : Contract)(e' : EventType),
+list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0) / e) (norm c1) )) alphabet) e' = 
+(flat_map (fun e => map (fun c =>  (if eq_event_dec e e' then Success _;_ c else Failure _;_ c) ) (times ((norm c0) / e) (norm c1) )) alphabet).
+Proof.
+intros. rewrite flat_map_list_derivative. 
+unfold list_derivative.
+assert (HA : (fun x => map (fun c : Contract => c / e') (map (fun c : Contract => Event x _;_ c)  (times ((norm c0)/x) (norm c1) ))) =
+             fun x => (map (fun c : Contract => (if eq_event_dec x e' then Success _;_ c else Failure _;_ c)) (times ((norm c0)/x) (norm c1)))).
+- apply functional_extensionality. intros. rewrite map_map.
+  assert (HA2: (fun x0 : Contract => (Event x _;_ x0) / e') = 
+               (fun c : Contract => if eq_event_dec x e' then Success _;_ c else Failure _;_ c)).
+  * apply functional_extensionality. intros. simpl. destruct (eq_event_dec x e') ; reflexivity.
+  * now rewrite HA2.
+- now rewrite HA. 
+Qed.
+
+
+Lemma inline_derivative_r : forall (c0 c1 : Contract)(e' : EventType),
+list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0)) ((norm c1)/ e) )) alphabet) e' = 
+(flat_map (fun e => map (fun c =>  (if eq_event_dec e e' then Success _;_ c else Failure _;_ c) ) (times ((norm c0)) ((norm c1) / e) )) alphabet).
+Proof.
+intros. rewrite flat_map_list_derivative. 
+unfold list_derivative.
+assert (HA : (fun x => map (fun c : Contract => c / e') (map (fun c : Contract => Event x _;_ c)  (times ((norm c0)) ((norm c1)/ x) ))) =
+             fun x => (map (fun c : Contract => (if eq_event_dec x e' then Success _;_ c else Failure _;_ c)) (times ((norm c0)) ((norm c1) / x)))).
+- apply functional_extensionality. intros. rewrite map_map.
+  assert (HA2: (fun x0 : Contract => (Event x _;_ x0) / e') = 
+               (fun c : Contract => if eq_event_dec x e' then Success _;_ c else Failure _;_ c)).
+  * apply functional_extensionality. intros. simpl. destruct (eq_event_dec x e'); reflexivity.
+  * now rewrite HA2.
+- now rewrite HA. 
+Qed.
+
+(*for a list l, l1 = filter f l, l2 = filter ~f l then l is an interleaving of l1 and l2*)
+(*if interleave l1 l2 l, then interleave (map f l1) (map f l2) (map f l) and finally interleave (flat_map f l1) (flat_map f l2) (flat_map f l) 
+by commutativity of plus, if plus_fold l, then plus_fold l' for all interleavings of l called l'*)
+(**)
+
+Lemma interleave_filter : forall (A:Set)(f : A -> bool)(l : list A), interleave (filter f l) (filter (fun x => negb (f x)) l) l.
+Proof. 
+intros. induction l.
+- simpl. constructor.
+- simpl. destruct (f a) eqn:Heqn ; simpl ; constructor ; assumption.
+Qed.
+
+Lemma interleave_closed_map : forall (A B:Set)(l1 l2 l : list A)(f : A ->  B), interleave l1 l2 l -> 
+  interleave (map f l1) (map f l2) (map f l).
+Proof. intros. induction H; simpl ; try constructor ; try assumption. 
+Qed.
+
+
+Lemma interleave_closed_concat : forall (A:Set) (l1 l2 l : list (list A)), interleave l1 l2 l -> 
+  interleave (concat l1) (concat l2) (concat l).
+Proof. intros.
+assert (cons_app : forall (A : Type)(a : A) (l' : list A), a :: l' = [a] ++ l').
+  { intros. reflexivity. }
+ induction H; try (simpl ; constructor).
+- induction e.
+  * simpl. assumption.
+  * simpl. simpl in IHe. constructor. assumption.
+- induction e.
+  * simpl. assumption.
+  * simpl. simpl in IHe. constructor. assumption.
+Qed.
+
+Lemma interleave_closed_flat_map : forall (A B:Set) (l1 l2 l : list A)(f : A -> list B), interleave l1 l2 l -> 
+  interleave (flat_map f l1) (flat_map f l2) (flat_map f l).
+Proof. intros. repeat rewrite flat_map_concat_map. apply interleave_closed_concat.
+apply interleave_closed_map. induction H ; try (simpl ; constructor) ; assumption.
+Qed.
+
+Lemma interleave_map_times_filter : forall (c0 c1 : Contract)(e' : EventType),
+interleave (flat_map (fun e => map (fun c => (if eq_event e e' then Success _;_ c else Failure _;_ c)) (times (norm c0) ((norm c1) / e) )) (filter (fun x => eq_event x e') alphabet))
+           (flat_map (fun e => map (fun c => (if eq_event e e' then Success _;_ c else Failure _;_ c)) (times (norm c0) ((norm c1) / e) )) (filter (fun x => negb (eq_event x e')) alphabet))
+           (flat_map (fun e => map (fun c => (if eq_event e e' then Success _;_ c else Failure _;_ c)) (times (norm c0) ((norm c1) / e) )) alphabet).
+Proof.
+intros.
+ apply interleave_closed_flat_map.
+ apply interleave_filter.
+Qed.
+
+
+
+Lemma or_imp : forall a b c : Prop, (a \/ b -> c) -> (b -> c).
+intros. apply H. right. assumption.
+Qed.
+
+Lemma map_congruence : forall (A B:Set) (f g : A -> B) (l1 l2 : list A),
+l1 = l2 -> (forall (x : A), In x l1 -> f x = g x) -> map f l1 = map g l2.
+Proof. intros. subst. induction l2. 
+- intros. subst. reflexivity.
+- intros. simpl. pose proof (H0 a (in_eq a _)). rewrite H. apply f_equal.
+  simpl in H0.
+  * assert (HA: forall x : A, In x l2 -> f x = g x).
+    {  intros. specialize H0 with x. apply H0. right. assumption. }
+    apply IHl2. assumption.
+Qed. 
+
+
+Lemma filter_reduce_if : forall (c0 c1 : Contract)(e' : EventType),
+(flat_map (fun e => map (fun c =>  (if eq_event e e' then Success _;_ c else Failure _;_ c) ) (times ((norm c0)) ((norm c1) / e) )) 
+        (filter (fun x => eq_event x e') alphabet)) =
+ (flat_map (fun e => map (fun c => Success _;_ c ) (times (norm c0) ((norm c1) / e) )) (filter (fun x => eq_event x e') alphabet)).
+Proof.
+intros. 
+repeat rewrite flat_map_concat_map. apply f_equal. apply map_congruence. { reflexivity. }
+intros. apply filter_In in H as [H1 H2]. apply map_congruence. { reflexivity. }
+intros. rewrite H2. reflexivity.
+Qed.
+
+Lemma filter_neg_reduce_if : forall (c0 c1 : Contract)(e' : EventType),
+(flat_map (fun e => map (fun c =>  (if eq_event e e' then Success _;_ c else Failure _;_ c) ) (times ((norm c0)) ((norm c1) / e) )) 
+        (filter (fun x => negb (eq_event x e')) alphabet)) =
+ (flat_map (fun e => map (fun c => Failure _;_ c ) (times (norm c0) ((norm c1) / e) )) (filter (fun x => negb (eq_event x e')) alphabet)).
+Proof.
+intros. 
+repeat rewrite flat_map_concat_map. apply f_equal. apply map_congruence. { reflexivity. }
+intros. apply filter_In in H as [H1 H2]. assert (HA: eq_event x e' = false).
+   - destruct (eq_event x e') ; simpl in H2 ; try discriminate H2 ; reflexivity.
+   - apply map_congruence. { reflexivity. }
+     intros. rewrite HA. reflexivity.
+Qed.
+
+
+Lemma in_map_of_neg_filter_prefix_is_failure : forall (c c0 c1 : Contract)(e' : EventType), 
+In c (flat_map (fun e : EventType => map (fun c : Contract => Failure _;_ c) (times (norm c0) (norm c1 / e))) 
+               (filter (fun x : EventType => negb (eq_event x e')) alphabet))
+-> exists c2, c = Failure _;_ c2.
+Proof.
+intros. apply in_flat_map in H as [e [P1 P2]]. apply in_map_iff in P2 as [c' [P3 P4]].
+symmetry in P3. exists c'. assumption.
+Qed.
+
+Lemma in_map_of_filter_prefix_is_success : forall (c c0 c1 : Contract)(e' : EventType), 
+In c (flat_map (fun e : EventType => map (fun c : Contract => Success _;_ c) (times (norm c0) (norm c1 / e))) 
+               (filter (fun x : EventType => eq_event x e') alphabet))
+-> exists c2, c = Success _;_ c2.
+Proof.
+intros. apply in_flat_map in H as [e [P1 P2]]. apply in_map_iff in P2 as [c' [P3 P4]].
+symmetry in P3. exists c'. assumption.
+Qed.
+
+Lemma in_map : forall (c c0 c1 : Contract)(e' : EventType)(s : Trace), 
+In c (flat_map (fun e => map (fun c => ((Event e) _;_ c) / e') (times ((norm c0)) ((norm c1) / e) )) alphabet)
+-> exists c', In c' (times ((norm c0)) ((norm c1) / e') ) -> (s ==~ c <-> s ==~ c').
+Proof.
+intros. apply in_flat_map in H as [e [P1 P2]]. apply in_map_iff in P2 as [c' [P3 P4]]. simpl in P3.
+symmetry in P3. exists c'. intros. assumption.
+Qed.
+
+
+Lemma map_failure : forall (s : Trace) (c0 c1 : Contract)(e' : EventType),
+  s ==~ (plus_fold (flat_map (fun e : EventType => map (fun c : Contract => Failure _;_ c) (times (norm c0) (norm c1 / e))) (filter (fun x : EventType => negb (eq_event x e')) alphabet)))
+ -> s ==~ Failure.
+Proof.
+intros.
+assert (HA: s ==~
+    plus_fold (flat_map (fun e : EventType => map (fun c : Contract => Failure _;_ c) (times (norm c0) (norm c1 / e))) (filter (fun x : EventType => negb (eq_event x e')) alphabet))
+  -> s ==~ Failure _;_ 
+    (plus_fold (flat_map (fun e : EventType => (times (norm c0) (norm c1 / e))) (filter (fun x : EventType => negb (eq_event x e')) alphabet)))).
+- intro H2. rewrite flat_map_concat_map in H2. rewrite <- map_map.
+Abort.
+
+(*
+Lemma times_map_cancel_r : forall (c0 c1 : Contract)(s : Trace)(e' : EventType),
+s ==~ plus_fold (list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times (norm c0) ((norm c1) / e) )) alphabet) e')
+ -> s ==~ plus_fold (times (norm c0) ((norm c1) / e')).
+Proof.  
+intros. rewrite inline_derivative_r in H. apply (plus_fold_comm (interleave_map_times_filter c0 c1 e')) in H.
+rewrite filter_reduce_if in H. rewrite filter_neg_reduce_if in H.
+apply plus_fold_app in H. apply plus_or in H as [H | H].
+- simpl.
+  pose proof .
+ apply (plus_fold_comm interleave_map_times_filter).
+
+Lemma times_norm_cancel_l : forall (c0 c1 : Contract)(s : Trace)(e : EventType),
+s ==~ plus_fold (times ((norm c0) / e) (norm c1)) -> s ==~ plus_fold (times (c0 / e) c1).
 Proof. Admitted.
 
-(*The list_derivative of a nested map expression involving times can be reduced to a term only involing times*)
-(*Useful for applying IH during functional induction on times c0 c1.*)
-Lemma universal_extension_cancel : forall (c0 c1 : Contract)(s : Trace)(e' : EventType),
-s ==~ plus_fold (list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0)  / e) (norm c1) )) alphabet) e')
- -> s ==~ plus_fold (times (c0 / e') c1).
-Proof. intros. unfold list_derivative in H. rewrite flat_map_concat_map in H. rewrite concat_map in H.
-  repeat rewrite map_map in H. funelim ((times (c0 / e) c1)). 
-rewrite H1 in Heqcall. simpl in Heqcall. rewrite <- Heqcall. apply plus_fold_app. apply MPlusL. apply H. apply H1 in H.
-apply H.
-- simpl in Heqcall.
-Admitted.
+Lemma times_norm_cancel_r : forall (c0 c1 : Contract)(s : Trace)(e : EventType),
+s ==~ plus_fold (times (norm c0) ((norm c1) / e)) -> s ==~ plus_fold (times c0 (c1 / e)).
+Proof. Admitted.*)
+
 
 
 Fixpoint trans (p : PContract) : Contract :=
@@ -779,16 +998,18 @@ match p with
 | p0 -+- p1 => (trans p0) _+_ (trans p1)
 end.
 
+
+(*
 Inductive non_seq : Contract -> Prop :=
 | NSSuccess : non_seq Success
 | NSFailure : non_seq Failure
 | NSEvent e : non_seq (Event e)
 | NSPlus c0 c1 : non_seq (c0 _+_ c1).
+*)
 
 
 
-
-Lemma split_plus_fold : forall (s : Trace)(l l1 l2 : list Contract), 
+(*Lemma split_plus_fold : forall (s : Trace)(l l1 l2 : list Contract), 
 s ==~ plus_fold l -> l = l1 ++ l2 -> s ==~ (plus_fold l1) \/ s ==~ (plus_fold l2).
 Proof. intros s l. generalize dependent s. funelim (plus_fold l).
 - intros. destruct l1. 2: { inversion H0. } left. now simpl. 
@@ -802,93 +1023,193 @@ Proof. intros s l. generalize dependent s. funelim (plus_fold l).
     ** simpl plus_fold at 1. assert (HA: (c0 :: l1) ++ l2 = c0 :: (l1 ++ l2)). { auto. }
        rewrite HA in H1. inversion H1. apply (H _ l1 l2) in H4.
         2:{ auto. } destruct H4. { left. now (apply MPlusR). } { right. auto. }
-Qed.
-
-Lemma list_derivative_spec : forall (l : list Contract)(e : EventType), (plus_fold l) / e = plus_fold (list_derivative l e).
-Proof. intros. funelim (plus_fold l).
-- reflexivity.
-- simpl. specialize H with e. now rewrite H.
-Qed.
-
-Lemma split_list : forall (l : list Contract), exists (l2 l3 : list Contract), l = l2 ++ l3.
-Proof. Admitted.
-
-(*Lemma list_derivative_decomposes : forall (c1 c2 : Contract)(e : EventType), list_derivative (times c1 c2) e = 
-   ((times (c1 / e) c2) ++ (times c1 (c2 / e))). 
-Proof. intros. funelim (times c1 c2).
-destruct (is_failure (norm c0) || is_failure (norm c1)) eqn:Heqn.
-- simpl in Heqcall. pose proof diff_false_true. unfold not in H1. exfalso. apply H1. Abort.*)
-
-Lemma is_failure_derivative : forall (c : Contract)(e : EventType),
-  is_failure (norm c) = true -> is_failure (norm (c / e)) = true.
-Proof. Admitted.
-
-Check f_equal (fun a => a + 1).
-
-Lemma app_f_equals : forall (l1 l2 l3 l4: list Contract), l1 = l3 -> l2 = l4 -> l1 ++ l2 = l3 ++ l4.
-Proof. intros. rewrite H. rewrite H0.  reflexivity.
-Qed.
-
-Lemma split_list_derivative : forall (l1 l2 : list Contract)(e : EventType), 
-list_derivative (l1 ++ l2) e = list_derivative l1 e ++ list_derivative l2 e. 
-Proof. intros. unfold list_derivative. apply map_app. Qed.
+Qed.*)
 
 
-
-(*Currently very nearly identical to times_derivative*)
-Lemma times_helper: forall (c0 c1 : Contract)(e : EventType)(s : Trace), e::s ==~ plus_fold (times c0 c1)
- -> s ==~ plus_fold ((times (c0/e) c1) ++ (times c0 (c1 / e))).
-Proof. intros c0 c1.
-funelim (times c0 c1). intros. destruct (is_failure (norm c0)) eqn:Heqn0.
-- destruct (is_failure (norm c1)) eqn:Heqn1.
-  * simpl in Heqcall. rewrite <- Heqcall in H1. simpl in H1. inversion H1.
-  * simpl in Heqcall. rewrite <- Heqcall in H1. simpl in H1. inversion H1.
-- destruct (is_failure (norm c1)) eqn:Heqn1.
-  * simpl in Heqcall. rewrite <- Heqcall in H1. simpl in H1. inversion H1.
-  * simpl in Heqcall.
-    remember (flat_map
-            (fun e : EventType =>
-             map (fun c : Contract => Event e _;_ c) (times (norm c0 / e) (norm c1)))
-            alphabet) as l1.
-    remember ( flat_map
-            (fun e : EventType =>
-             map (fun c : Contract => Event e _;_ c) (times (norm c0) (norm c1 / e)))
-            alphabet) 
-          as l2. rewrite <- Heqcall in H1. apply plus_fold_app in H1.
-    apply plus_or in H1 as [H1 | H1].
-    ** apply plus_fold_app. rewrite Heql1 in H1. apply universal_extension in H1.
-       apply MPlusL. apply H1.
-    ** rewrite Heql2 in H1. apply universal_extension in H1.
-    remember (map (fun c : Contract => Event Notify _;_ c)
-           (times (norm c0 / Notify) (norm c1))) as l2.
-    remember (map (fun c : Contract => Event Transfer _;_ c)
-          (times (norm c0) (norm c1 / Transfer))) as l3.
-    remember (map (fun c : Contract => Event Notify _;_ c)
-          (times (norm c0) (norm c1 / Notify))) as l4.
-    apply plus_fold_app in H1. apply plus_or in H1 as [H1 | H1].
-    ** apply plus_fold_app. apply MPlusL.
- apply plus_fold_app in H1. apply plus_or in H1 as [H1 | H1].
-      *** rewrite Heql1 in H1. apply reduce_universal_match in H1.
- generalize dependent e. generalize dependent s.
-Admitted.
-
-
-
-
-(*proof sketch: take hypothesis from semantic to operational proposition, move derive inside as list_derivative,
-decompose list_derivative, make decomposition a disjunction with split_plus_fold*)
-Lemma times_derivative : forall (c1 c2 : Contract)(e : EventType)(s : Trace), e::s ==~ ((plus_fold (times c1 c2))) -> 
-   s ==~ plus_fold (times (c1 / e) c2) \/ s ==~ plus_fold (times c1 (c2 / e)). 
+Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s ==~ c <-> s ==~ c / e.
 Proof.
-intros c1 c2 e s H. apply comp_iff_oper in H. simpl in H. rewrite list_derivative_spec in H.
-rewrite (list_derivative_decomposes c1 c2 e) in H. apply comp_iff_oper in H. 
-apply (split_plus_fold _ _ (times (c1 / e) c2) (times c1 (c2 / e)) H). reflexivity.
+split ; repeat rewrite comp_iff_oper ; intro H ; rewrite <- H ; apply derive_spec.
 Qed.
 
 
-Lemma times_par : forall (c1 c2 : Contract) (s3 : Trace), s3 ==~ plus_fold (times c1 c2) -> exists (s1 s2 : Trace), 
-interleave s1 s2 s3 /\ s1 ==~ c1 /\ s2 ==~ c2.
+
+Lemma decompose_plus_fold : forall (l1 l2 : list Contract)(s : Trace)(e : EventType), s ==~ (plus_fold (l1 ++ l2)) -> 
+s ==~ plus_fold l1 \/ s ==~ plus_fold l2.
+Proof.
+intros. apply plus_fold_app in H. apply plus_or. assumption.
+Qed.
+
+
+
+Equations or_fold (l : list bool) : bool :=
+  or_fold [] := false;
+  or_fold (c::l) := c || (or_fold l).
+
+Global Transparent or_fold.
+
+Search (_ || _ = true).
+
+Lemma plus_fold_or_fold : forall (s : Trace) (l : list Contract),
+ (s =~ plus_fold l) = true -> or_fold (map (fun c => s =~ c) l) = true.
+Proof.
+intros. induction l.
+- simpl in H. apply comp_iff_oper in H. inversion H.
+- simpl in *. apply comp_iff_oper in H. apply plus_or in H as [H | H].
+  * simpl. apply orb_true_intro. left. apply comp_iff_oper. assumption.
+  * apply orb_true_intro. right. apply IHl. apply comp_iff_oper. assumption.
+Qed.
+
+Lemma in_plus_fold : forall (s : Trace)(l : list Contract), s ==~ plus_fold l <-> 
+(exists c, In c l /\ s ==~ c).
 Proof. Admitted.
+
+(*
+Lemma oper_false : forall (s : Trace)(c : Contract), s =~ c = false -> ~(s ==~ c).
+Proof.
+intros. intro H1. apply comp_iff_oper in H1. rewrite H in H1. discriminate.
+Qed.
+*)
+
+Lemma oper_false : forall (s : Trace)(c : Contract), ~(s ==~c) -> s =~ c = false.
+Proof.
+intros. destruct (s =~ c) eqn:Heqn.
+- apply comp_iff_oper in Heqn. contradiction.
+- reflexivity.
+Qed.
+
+Lemma reduce_success : forall (s : Trace)(c : Contract), s =~ Success _;_ c = s =~ c.
+Proof.
+intros. destruct s.
+- reflexivity.
+- simpl. destruct (s =~ c / e) eqn:Heqn. 
+  * apply comp_iff_oper. apply MPlusR. apply comp_iff_oper. assumption.
+  * apply oper_false. intro H2. apply plus_or in H2 as [H2 | H2].
+    ** inversion H2. inversion H3.
+    ** apply comp_iff_oper in H2. rewrite Heqn in H2. discriminate.
+Qed.
+
+Lemma reduce_success_comp : forall (s : Trace)(c : Contract), s ==~ Success _;_ c -> s ==~ c.
+Proof. intros. apply comp_iff_oper in H. rewrite reduce_success in H.
+apply comp_iff_oper in H. assumption.
+Qed.
+
+Lemma add_success : forall (s : Trace)(c : Contract), s ==~ c -> s ==~ Success _;_ c.
+Proof.
+intros. rewrite <- (app_nil_l s). constructor ; auto.
+Qed.
+
+Lemma add_success : forall (s : Trace)(c : Contract), s ==~ c -> s ==~ Success _;_ c.
+Proof.
+intros. rewrite <- (app_nil_l s). constructor ; auto.
+Qed.
+
+Lemma seq_failure : forall (s : Trace)(c : Contract), s =~ Failure _;_ c = false.
+Proof.
+intros. apply oper_false. intro H. inversion H.  inversion H3. 
+Qed.
+
+Lemma plus_fold_exists_fold : forall (s : Trace)(l : list Contract),
+s ==~ plus_fold l <-> fold_right  (fun c => or (s ==~ c)) False l.
+Proof. Admitted.
+
+
+
+
+(* Lemma flat_map_plus_fold : forall (s : Trace)(l : list Contract),
+s ==~ plus_fold (flat_map (fun _ => l) alphabet) -> s ==~ plus_fold l.
+Proof.
+intros. apply plus_fold_exists_fold in H. apply Exists_fold_right in H. inversion H.
+- app*)
+
+Lemma times_derivative_or: forall (c0 c1 : Contract)(e : EventType)(s : Trace), s ==~ (plus_fold (times c0 c1)) / e
+ -> s ==~ plus_fold ((times ((norm c0) / e) (norm c1))) \/ s==~ plus_fold (times (norm c0) ((norm c1) / e)).
+Proof. 
+intros. simp times in H. destruct (eq_contract_dec (norm c0) Failure) eqn:Heqn1.
+  * inversion H. 
+  * destruct (eq_contract_dec (norm c1) Failure).
+    ** inversion H.
+    ** destruct (eq_contract_dec (norm c0) Success).
+      *** simpl in H. right. rewrite e0. simp times. simpl.
+          destruct (eq_contract_dec (norm (norm c1 / e)) Failure).
+        **** apply plus_failure in H. apply norm_failure_equivalence with (s:=s) in e1.
+             contradiction.
+        **** apply plus_failure in H. simpl. apply MPlusL. apply -> match_closed_norm.
+             assumption.
+      *** destruct (eq_contract_dec (norm c1) Success).
+        **** left. rewrite e0. simp times. simpl. 
+              destruct (eq_contract_dec (norm (norm c0 / e)) Failure).
+          ***** simpl in H. apply plus_failure in H.
+                apply match_closed_norm in H. rewrite e1 in H. inversion H.
+          ***** destruct (eq_contract_dec (norm (norm c0 / e)) Success).
+            ****** simpl in H. apply plus_failure in H. 
+                   apply match_closed_norm in H. rewrite e1 in H.
+                   simpl. apply MPlusL. assumption.
+            ****** simpl in *. apply MPlusL. apply -> match_closed_norm.
+                   apply plus_failure in H. assumption.  
+(*Everything up until this point is only for the base cases Failure and Success*)
+        **** rewrite list_derivative_spec in H. rewrite list_derivative_app in H.
+             apply plus_fold_app in H. apply plus_or in H as [H | H].
+          ***** left. rewrite inline_derivative_l in H. 
+                apply in_plus_fold in H as [c' [P1 P2]].
+                apply in_flat_map in P1 as [x' [P3 P4]].
+            ****** apply in_plus_fold. destruct (eq_event_dec x' e).
+              ******* apply in_map_iff in P4 as [c'' [P5 P6]].
+                      exists c''. rewrite e0 in P6. rewrite <- P5 in P2.
+                      apply reduce_success_comp in P2.  split ; try assumption.
+              ******* apply in_map_iff in P4 as [c'' [P5 P6]]. rewrite <- P5 in P2.
+                      inversion P2. inversion H0.
+          ***** right. rewrite inline_derivative_r in H. 
+                apply in_plus_fold in H as [c' [P1 P2]].
+                apply in_flat_map in P1 as [x' [P3 P4]].
+            ****** apply in_plus_fold. destruct (eq_event_dec x' e).
+              ******* apply in_map_iff in P4 as [c'' [P5 P6]].
+                      exists c''. rewrite e0 in P6. rewrite <- P5 in P2.
+                      apply reduce_success_comp in P2.  split ; try assumption.
+              ******* apply in_map_iff in P4 as [c'' [P5 P6]]. rewrite <- P5 in P2.
+                      inversion P2. inversion H0.
+Qed.
+ 
+
+
+
+Lemma plus_fold_empty_success : forall (c0 c1 : Contract), [] ==~ plus_fold (times c0 c1)
+ -> [] ==~ norm c0 /\ [] ==~ norm c1.
+Proof. 
+intros. funelim (times c0 c1).
+destruct (eq_contract_dec (norm c0) Failure).
+- rewrite <- Heqcall in H1. simpl in H1. inversion H1.
+- destruct (eq_contract_dec (norm c1) Failure) eqn:Heqn1.
+  * rewrite <- Heqcall in H1. simpl in H1. inversion H1.
+  * destruct (eq_contract_dec (norm c0) Success).
+    ** simp times in H1. rewrite e in H1.
+       simpl in H1. rewrite Heqn1 in H1. simpl in H1. apply plus_failure in H1.
+       rewrite e. split. { constructor. } { assumption. }
+    ** destruct (eq_contract_dec (norm c1) Success).
+      *** rewrite e. rewrite <- Heqcall in H1. simpl in H1. apply plus_failure in H1.
+          split. assumption. constructor.
+      *** rewrite <- Heqcall in H1.
+          apply plus_fold_app in H1. apply plus_or in H1 as [H1 | H1];
+          apply in_plus_fold in H1 as [c' [P1 P2]]; apply in_flat_map in P1 as [x' [P3 P4]];
+          apply in_map_iff in P4 as [e' [P5 P6]]; rewrite <- P5 in P2;
+          inversion P2; apply app_eq_nil in H1 as [H6 H7]; rewrite H6 in H4; inversion H4.
+Qed.
+
+Lemma times_par : forall (s : Trace)(c1 c2 : Contract) , s ==~ plus_fold (times c1 c2) -> exists (s1 s2 : Trace), 
+interleave s1 s2 s /\ s1 ==~ c1 /\ s2 ==~ c2.
+Proof.
+induction s.
+- intros. exists []. exists []. split. constructor. apply plus_fold_empty_success in H as [H1 H2].
+  subst ; split ; apply match_closed_norm; assumption. 
+- intros. apply derive_spec_comp in H. apply times_derivative_or in H as [H | H].
+  * specialize IHs with (c1:=norm c1 / a)(c2:=norm c2). apply IHs in H as [s1' [s2' [P1 [P2 P3]]]].
+    exists (a :: s1'). exists s2'. split.
+    ** try (constructor ; assumption).
+    ** split. { apply match_closed_norm. apply derive_spec_comp. assumption. } { apply match_closed_norm in P3. assumption.  }
+  * specialize IHs with (c1:=norm c1)(c2:=norm c2 / a). apply IHs in H as [s1' [s2' [P1 [P2 P3]]]].
+    exists s1'. exists (a::s2'). split.
+    ** try (constructor ; assumption).
+    ** split. { apply match_closed_norm. assumption. } { apply match_closed_norm . apply derive_spec_comp. assumption.  }
+Qed.
 
 
 
@@ -901,7 +1222,7 @@ Proof. induction p.
   * apply MPPlusL. apply IHp1. apply H2.
   * apply MPPlusR. apply IHp2. apply H1.
 - intros s H. simpl in H. apply times_par in H. destruct H as [s1 [s2 [P1 [P2 P3]]]].
-  * apply (MPPar s1 _ s2).  { apply (IHp1 _ P2). } { apply (IHp2 _ P3). } { apply P1. }
+  * apply MPPar with (s1:=s1)(s2:=s2). { apply (IHp1 _ P2). } { apply (IHp2 _ P3). } { apply P1. }
 Qed.
 
 Lemma pmatches_matches : forall (p : PContract), (forall (s : Trace), s p==~ p <-> s ==~ (trans p)).
@@ -909,101 +1230,42 @@ Proof. Admitted.
 
 
 
-
-(*Fixpoint trans_inv (c : Contract) : (bool * PContract) :=
-match c with
-| Success => (true,PSuccess)
-| Failure => (true,PFailure)
-| Event e => (true,PEvent e)
-| c0 _+_ c1 => let (f0,c0') :=(trans_inv c0) 
-               in let (f1,c1') := trans_inv c1
-                  in (f0 && f1,c0' -+- c1')       
-| c0 _;_ c1 => (false,PFailure)
-end.
-
-Lemma trans_non_seq : forall (p : PContract), non_seq (trans p).
-Proof. Admitted.
-
-Lemma trans_inv_non_seq : forall c : Contract, non_seq c -> fst (trans_inv c) = true.
-Proof. Admitted.
-
-Lemma trans_cancel : forall (c : Contract)(p : PContract), trans_inv c = (true,p) -> trans p = c.
-Proof. Admitted.*)
+                    
+(*
+ apply comp_iff_oper in H.
 
 
-
-(*Lemma times_helper: forall (c0 c1 : Contract)(e : EventType), is_failure (norm c0) = false -> 
-  is_failure (norm c1) = false -> list_derivative (times c0 c1) e = times (c0 / e) c1 ++ times c0 (c1 / e).
-Proof. intros. funelim (times c0 c1). rewrite H1 in Heqcall. rewrite H2 in Heqcall. simpl in Heqcall.
-repeat rewrite app_nil_r in Heqcall.
-    remember (map (fun c : Contract => Event Transfer _;_ c)
-             (times (norm c0 / Transfer) (norm c1)) ++
-           map (fun c : Contract => Event Notify _;_ c)
-             (times (norm c0 / Notify) (norm c1))) as l1.
-    remember (map (fun c : Contract => Event Transfer _;_ c)
-            (times (norm c0) (norm c1 / Transfer)) ++
-          map (fun c : Contract => Event Notify _;_ c)
-            (times (norm c0) (norm c1 / Notify))) as l2.
-rewrite <- Heqcall. rewrite split_list_derivative. apply app_f_equals.
-- rewrite Heql1. rewrite split_list_derivative. unfold list_derivative.
-  rewrite map_map. destruct e.
-  * simpl. unfold list_derivative in H. rewrite H. rewrite H1 in H0. rewrite H2 in H0. simpl in H0.
-  rewrite H0. rewrite (eqb_refl) in H0.
- funelim (times (c0 / e) c1).
-
-Lemma times_derivative : forall (c1 c2 : Contract)(e : EventType)(s : Trace), 
-s ==~ (plus_fold (times c1 c2)) / e -> s ==~ plus_fold (times (c1 / e) c2) _+_ (plus_fold (times c1 (c2 / e))).
-Proof. intros. funelim (times c1 c2). destruct (is_failure (norm c0)) eqn:Heqn0.
-- destruct (is_failure (norm c1)) eqn:Heqn1.
-  * simpl in Heqcall ; rewrite <- Heqcall in H1 ; simpl in H1.
-    apply (is_failure_derivative _ e) in Heqn0.
-    funelim (times (c0 / e) c1). rewrite Heqn0 in Heqcall0 ; simpl in Heqcall0 ; rewrite <- Heqcall0. 
-    simpl. now apply MPlusL.
-  * simpl in Heqcall ; rewrite <- Heqcall in H1 ; simpl in H1.
-    apply (is_failure_derivative _ e) in Heqn0.
-    funelim (times (c0 / e) c1). rewrite Heqn0 in Heqcall0 ; simpl in Heqcall0 ; rewrite <- Heqcall0. 
-    simpl. now apply MPlusL.
-- destruct (is_failure (norm c1)) eqn:Heqn1.
-  * simpl in Heqcall ; rewrite <- Heqcall in H1 ; simpl in H1.
-    apply (is_failure_derivative _ e) in Heqn1.
-    funelim (times c0 (c1/ e)). rewrite Heqn1 in Heqcall0 ; rewrite orb_comm in Heqcall0 ; simpl in Heqcall0. 
-    rewrite <- Heqcall0. simpl. now apply MPlusL.
-  * simpl in Heqcall. repeat rewrite app_nil_r in Heqcall.
-    remember (map (fun c : Contract => Event Transfer _;_ c)
-             (times (norm c0 / Transfer) (norm c1)) ++
-           map (fun c : Contract => Event Notify _;_ c)
-             (times (norm c0 / Notify) (norm c1))) as l1.
-    remember (map (fun c : Contract => Event Transfer _;_ c)
-            (times (norm c0) (norm c1 / Transfer)) ++
-          map (fun c : Contract => Event Notify _;_ c)
-            (times (norm c0) (norm c1 / Notify))) as l2.
-    apply plus_or. rewrite list_derivative_spec in H1. apply (f_equal (fun l=> list_derivative l e)) in Heqcall.
-    assert (HA: list_derivative (l1 ++ l2) e = list_derivative l1 e ++ list_derivative l2 e). 
-    { unfold list_derivative. apply map_app. } rewrite HA in Heqcall. symmetry in Heqcall. 
-    apply (split_plus_fold s _ _ _ H1). rewrite Heqcall. apply app_f_equals.
-
-    **  apply (is_failure_derivative _ e) in Heqn1. rewrite Heql1.  funelim (times (c0 / e) c1).
-simpl. rewrite list_derivative_spec in Heqcall.  apply Heqcall.  _ Heqcall).
-
-simpl in H. rewrite list_derivative_spec in H1. rewrite <- Heqcall in H1 ; simpl in Heqcall.
-simpl in Heqcall. rewrite Heqcall in H1 ; simpl in H1.
+                apply plus_fold_or_fold in H. 
+                assert (HA : (map (fun c : Contract => s =~ c)
+                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then Success _;_ c else Failure _;_ c)
+                                                                  (times (norm c0 / e0) (norm c1))) alphabet)) =
+                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then s =~ c else false)
+                                                                  (times (norm c0 / e0) (norm c1))) alphabet)).
+                { repeat rewrite flat_map_concat_map. rewrite concat_map. apply f_equal.
+                  rewrite map_map. apply map_ext. intros. rewrite map_map. apply map_ext.
+                  intros. destruct (eq_event_dec a e). apply reduce_success. apply seq_failure. } 
+                rewrite HA in H.
 
 
+                assert (HA2 : (or_fold (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then s =~ c else false) 
+                                                                           (times (norm c0 / e0) (norm c1))) alphabet)) =
+                              (or_fold  (map (fun c : Contract => s =~ c) (times (norm c0 / e) (norm c1))))
+                       ).
+                {  }
 
-    funelim (times c0 (c1 / e)). rewrite Heqn0 in Heqcall0. simpl in Heqcall0.
-  in  rewrite list_derivative_spec in H. funelim (times c1 c2).
-rewrite orb_false_iff in *.
-destruct ((is_failure (norm c0) || is_failure (norm c1))) eqn:Heqn.
-- rewrite orb_true_iff in Heqn.  destruct Heqn. 
-  * simpl in Heqcall.  simpl in H1. simpl times in H1. apply split_plus_fold in H1.*)
 
-(*Check eq_refl.
+                assert (HA : (map (fun c : Contract => s =~ c)
+                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then Success _;_ c else Failure _;_ c)
+                                                                  (times (norm c0 / e0) (norm c1))) alphabet)) =
+                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then s =~ c else false)
+                                                                  (times (norm c0 / e0) (norm c1))) alphabet)).
+                { repeat rewrite flat_map_concat_map. rewrite concat_map. apply f_equal.
+                  rewrite map_map. apply map_ext. intros. rewrite map_map. apply map_ext.
+                  intros. destruct (eq_event_dec a e). apply reduce_success. apply seq_failure. } 
+                rewrite HA in H.
+          
 
-Definition prefix_universal_match (l : list Contract) : list Contract :=
-flat_map (fun e => map (fun c => (Event e) _;_ c) l) alphabet.
-
-Lemma reduce_universal_match : forall (l : list Contract)(s : Trace)(e : EventType), 
-e::s ==~ plus_fold (prefix_universal_match l) -> s ==~ plus_fold l.
-Proof. Admitted.*)
-
-Search (_ || _ = _).
+(*apply plus_fold_exists_fold in H.
+                apply Exists_fold_right in H. apply plus_fold_exists_fold. inversion H.
+            ****** apply Exists_fold_right. inversion H0.
+*)
