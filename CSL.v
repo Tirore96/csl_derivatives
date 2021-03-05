@@ -513,7 +513,19 @@ split.
     ** destruct (eq_contract_dec (norm c2) Failure).
       *** rewrite e in IHmatches_comp. inversion IHmatches_comp.
       *** apply MPlusR. assumption.
-- Admitted.
+- generalize dependent s. induction c ; intros ; simpl in H ; try assumption.
+  * destruct (eq_contract_dec (norm c1) Failure).
+    ** apply MPlusR. auto.
+    ** destruct (eq_contract_dec (norm c2) Failure).
+      *** apply MPlusL. auto.
+      *** apply plus_or in H as [H | H]; auto.
+  * destruct (eq_contract_dec (norm c1) Failure).
+    ** inversion H.
+    ** destruct (eq_contract_dec (norm c2) Failure). 
+      *** inversion H. 
+      ***  inversion H.  apply IHc1 in H3.  apply IHc2 in H4. auto. 
+Qed.
+
 
 Lemma norm_failure_equivalence : forall (c : Contract), norm c = Failure ->
 (forall (s : Trace), ~(s ==~ c)).
@@ -764,44 +776,11 @@ intro. induction l1.
     ** apply MPlusR. apply IHl1. assumption.
 Qed.
 
-
-Lemma plus_fold_comm : forall (s : Trace)(l1 l2 l : list Contract), interleave l1 l2 l -> s ==~ plus_fold l
- -> s ==~ plus_fold (l1 ++ l2).
-Proof.
-intros. assert (HA : forall (A:Set) (e : A) (l : list A), e :: l = [e] ++ l). { reflexivity. }
-  induction H ; simpl ; try constructor ; try assumption.
-- rewrite app_nil_r. assumption.
-- rewrite HA in H0 ; apply plus_fold_app in H0 ; rewrite HA ; apply plus_fold_app ;
-  apply plus_or in H0 as [H0 | H0]. apply MPlusL. assumption.
-  * apply MPlusR. apply IHinterleave. assumption.
-- rewrite HA in H0. apply plus_fold_app in H0 ; rewrite HA ; apply plus_fold_app ;
-  apply plus_or in H0 as [H0 | H0].
-  * apply MPlusR. apply plus_fold_app. apply MPlusL. 
-  assumption.
-  * apply IHinterleave in H0. apply plus_fold_app in H0. apply plus_or in H0 as [H0 | H0].
-    ** apply MPlusL. assumption.
-    ** apply MPlusR. apply plus_fold_app. apply MPlusR. assumption.
-Qed.
-
 Lemma flat_map_list_derivative : forall (f: EventType -> list Contract) (l: list EventType)(e : EventType),
   list_derivative (flat_map f l) e = flat_map (fun x=> list_derivative (f x) e) l.
 Proof. intros. repeat rewrite flat_map_concat_map. repeat unfold list_derivative. 
 rewrite concat_map. rewrite map_map. reflexivity.
 Qed.
-
-
-(*Lemma inline_derivative_l : forall (c0 c1 : Contract)(e' : EventType),
-list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0)  / e) (norm c1) )) alphabet) e' = 
-(flat_map (fun e => map (fun c =>  ((Event e)  _;_ c) / e' ) (times ((norm c0)  / e) (norm c1) )) alphabet).
-Proof.
-intros. rewrite flat_map_list_derivative. 
-unfold list_derivative.
-assert (HA : (fun x => map (fun c : Contract => c / e') (map (fun c : Contract => Event x _;_ c) (times (norm c0 / x) (norm c1)))) =
-             fun x => (map (fun c : Contract => (Event x _;_ c) / e') (times (norm c0 / x) (norm c1)))).
-        { apply functional_extensionality. intros. rewrite map_map. reflexivity.  }
-rewrite HA. reflexivity.
-Qed.*)
-
 
 
 Lemma inline_derivative_l : forall (c0 c1 : Contract)(e' : EventType),
@@ -837,10 +816,6 @@ assert (HA : (fun x => map (fun c : Contract => c / e') (map (fun c : Contract =
 - now rewrite HA. 
 Qed.
 
-(*for a list l, l1 = filter f l, l2 = filter ~f l then l is an interleaving of l1 and l2*)
-(*if interleave l1 l2 l, then interleave (map f l1) (map f l2) (map f l) and finally interleave (flat_map f l1) (flat_map f l2) (flat_map f l) 
-by commutativity of plus, if plus_fold l, then plus_fold l' for all interleavings of l called l'*)
-(**)
 
 Lemma interleave_filter : forall (A:Set)(f : A -> bool)(l : list A), interleave (filter f l) (filter (fun x => negb (f x)) l) l.
 Proof. 
@@ -875,15 +850,6 @@ Proof. intros. repeat rewrite flat_map_concat_map. apply interleave_closed_conca
 apply interleave_closed_map. induction H ; try (simpl ; constructor) ; assumption.
 Qed.
 
-Lemma interleave_map_times_filter : forall (c0 c1 : Contract)(e' : EventType),
-interleave (flat_map (fun e => map (fun c => (if eq_event e e' then Success _;_ c else Failure _;_ c)) (times (norm c0) ((norm c1) / e) )) (filter (fun x => eq_event x e') alphabet))
-           (flat_map (fun e => map (fun c => (if eq_event e e' then Success _;_ c else Failure _;_ c)) (times (norm c0) ((norm c1) / e) )) (filter (fun x => negb (eq_event x e')) alphabet))
-           (flat_map (fun e => map (fun c => (if eq_event e e' then Success _;_ c else Failure _;_ c)) (times (norm c0) ((norm c1) / e) )) alphabet).
-Proof.
-intros.
- apply interleave_closed_flat_map.
- apply interleave_filter.
-Qed.
 
 
 
@@ -903,92 +869,6 @@ Proof. intros. subst. induction l2.
 Qed. 
 
 
-Lemma filter_reduce_if : forall (c0 c1 : Contract)(e' : EventType),
-(flat_map (fun e => map (fun c =>  (if eq_event e e' then Success _;_ c else Failure _;_ c) ) (times ((norm c0)) ((norm c1) / e) )) 
-        (filter (fun x => eq_event x e') alphabet)) =
- (flat_map (fun e => map (fun c => Success _;_ c ) (times (norm c0) ((norm c1) / e) )) (filter (fun x => eq_event x e') alphabet)).
-Proof.
-intros. 
-repeat rewrite flat_map_concat_map. apply f_equal. apply map_congruence. { reflexivity. }
-intros. apply filter_In in H as [H1 H2]. apply map_congruence. { reflexivity. }
-intros. rewrite H2. reflexivity.
-Qed.
-
-Lemma filter_neg_reduce_if : forall (c0 c1 : Contract)(e' : EventType),
-(flat_map (fun e => map (fun c =>  (if eq_event e e' then Success _;_ c else Failure _;_ c) ) (times ((norm c0)) ((norm c1) / e) )) 
-        (filter (fun x => negb (eq_event x e')) alphabet)) =
- (flat_map (fun e => map (fun c => Failure _;_ c ) (times (norm c0) ((norm c1) / e) )) (filter (fun x => negb (eq_event x e')) alphabet)).
-Proof.
-intros. 
-repeat rewrite flat_map_concat_map. apply f_equal. apply map_congruence. { reflexivity. }
-intros. apply filter_In in H as [H1 H2]. assert (HA: eq_event x e' = false).
-   - destruct (eq_event x e') ; simpl in H2 ; try discriminate H2 ; reflexivity.
-   - apply map_congruence. { reflexivity. }
-     intros. rewrite HA. reflexivity.
-Qed.
-
-
-Lemma in_map_of_neg_filter_prefix_is_failure : forall (c c0 c1 : Contract)(e' : EventType), 
-In c (flat_map (fun e : EventType => map (fun c : Contract => Failure _;_ c) (times (norm c0) (norm c1 / e))) 
-               (filter (fun x : EventType => negb (eq_event x e')) alphabet))
--> exists c2, c = Failure _;_ c2.
-Proof.
-intros. apply in_flat_map in H as [e [P1 P2]]. apply in_map_iff in P2 as [c' [P3 P4]].
-symmetry in P3. exists c'. assumption.
-Qed.
-
-Lemma in_map_of_filter_prefix_is_success : forall (c c0 c1 : Contract)(e' : EventType), 
-In c (flat_map (fun e : EventType => map (fun c : Contract => Success _;_ c) (times (norm c0) (norm c1 / e))) 
-               (filter (fun x : EventType => eq_event x e') alphabet))
--> exists c2, c = Success _;_ c2.
-Proof.
-intros. apply in_flat_map in H as [e [P1 P2]]. apply in_map_iff in P2 as [c' [P3 P4]].
-symmetry in P3. exists c'. assumption.
-Qed.
-
-Lemma in_map : forall (c c0 c1 : Contract)(e' : EventType)(s : Trace), 
-In c (flat_map (fun e => map (fun c => ((Event e) _;_ c) / e') (times ((norm c0)) ((norm c1) / e) )) alphabet)
--> exists c', In c' (times ((norm c0)) ((norm c1) / e') ) -> (s ==~ c <-> s ==~ c').
-Proof.
-intros. apply in_flat_map in H as [e [P1 P2]]. apply in_map_iff in P2 as [c' [P3 P4]]. simpl in P3.
-symmetry in P3. exists c'. intros. assumption.
-Qed.
-
-
-Lemma map_failure : forall (s : Trace) (c0 c1 : Contract)(e' : EventType),
-  s ==~ (plus_fold (flat_map (fun e : EventType => map (fun c : Contract => Failure _;_ c) (times (norm c0) (norm c1 / e))) (filter (fun x : EventType => negb (eq_event x e')) alphabet)))
- -> s ==~ Failure.
-Proof.
-intros.
-assert (HA: s ==~
-    plus_fold (flat_map (fun e : EventType => map (fun c : Contract => Failure _;_ c) (times (norm c0) (norm c1 / e))) (filter (fun x : EventType => negb (eq_event x e')) alphabet))
-  -> s ==~ Failure _;_ 
-    (plus_fold (flat_map (fun e : EventType => (times (norm c0) (norm c1 / e))) (filter (fun x : EventType => negb (eq_event x e')) alphabet)))).
-- intro H2. rewrite flat_map_concat_map in H2. rewrite <- map_map.
-Abort.
-
-(*
-Lemma times_map_cancel_r : forall (c0 c1 : Contract)(s : Trace)(e' : EventType),
-s ==~ plus_fold (list_derivative (flat_map (fun e => map (fun c => (Event e) _;_ c) (times (norm c0) ((norm c1) / e) )) alphabet) e')
- -> s ==~ plus_fold (times (norm c0) ((norm c1) / e')).
-Proof.  
-intros. rewrite inline_derivative_r in H. apply (plus_fold_comm (interleave_map_times_filter c0 c1 e')) in H.
-rewrite filter_reduce_if in H. rewrite filter_neg_reduce_if in H.
-apply plus_fold_app in H. apply plus_or in H as [H | H].
-- simpl.
-  pose proof .
- apply (plus_fold_comm interleave_map_times_filter).
-
-Lemma times_norm_cancel_l : forall (c0 c1 : Contract)(s : Trace)(e : EventType),
-s ==~ plus_fold (times ((norm c0) / e) (norm c1)) -> s ==~ plus_fold (times (c0 / e) c1).
-Proof. Admitted.
-
-Lemma times_norm_cancel_r : forall (c0 c1 : Contract)(s : Trace)(e : EventType),
-s ==~ plus_fold (times (norm c0) ((norm c1) / e)) -> s ==~ plus_fold (times c0 (c1 / e)).
-Proof. Admitted.*)
-
-
-
 Fixpoint trans (p : PContract) : Contract :=
 match p with
 | PSuccess => Success
@@ -997,33 +877,6 @@ match p with
 | p0 -*- p1 => plus_fold (times (trans p0) (trans p1))
 | p0 -+- p1 => (trans p0) _+_ (trans p1)
 end.
-
-
-(*
-Inductive non_seq : Contract -> Prop :=
-| NSSuccess : non_seq Success
-| NSFailure : non_seq Failure
-| NSEvent e : non_seq (Event e)
-| NSPlus c0 c1 : non_seq (c0 _+_ c1).
-*)
-
-
-
-(*Lemma split_plus_fold : forall (s : Trace)(l l1 l2 : list Contract), 
-s ==~ plus_fold l -> l = l1 ++ l2 -> s ==~ (plus_fold l1) \/ s ==~ (plus_fold l2).
-Proof. intros s l. generalize dependent s. funelim (plus_fold l).
-- intros. destruct l1. 2: { inversion H0. } left. now simpl. 
-- intros. inversion H0.
-  * destruct l1.
-    ** simpl in H1. inversion H1. right. simpl. apply MPlusL. apply H4.
-    ** left. assert (HA: (c0 :: l1) ++ l2 = c0 :: (l1 ++ l2)). { auto. } rewrite HA in H1.
-       inversion H1. simpl.  apply MPlusL. rewrite <- H7. apply H4.
-  * destruct l1.
-    ** simpl in H1. inversion H1. right. simpl. apply MPlusR. apply H4.
-    ** simpl plus_fold at 1. assert (HA: (c0 :: l1) ++ l2 = c0 :: (l1 ++ l2)). { auto. }
-       rewrite HA in H1. inversion H1. apply (H _ l1 l2) in H4.
-        2:{ auto. } destruct H4. { left. now (apply MPlusR). } { right. auto. }
-Qed.*)
 
 
 Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s ==~ c <-> s ==~ c / e.
@@ -1047,7 +900,6 @@ Equations or_fold (l : list bool) : bool :=
 
 Global Transparent or_fold.
 
-Search (_ || _ = true).
 
 Lemma plus_fold_or_fold : forall (s : Trace) (l : list Contract),
  (s =~ plus_fold l) = true -> or_fold (map (fun c => s =~ c) l) = true.
@@ -1061,15 +913,21 @@ Qed.
 
 Lemma in_plus_fold : forall (s : Trace)(l : list Contract), s ==~ plus_fold l <-> 
 (exists c, In c l /\ s ==~ c).
-Proof. Admitted.
-
-(*
-Lemma oper_false : forall (s : Trace)(c : Contract), s =~ c = false -> ~(s ==~ c).
 Proof.
-intros. intro H1. apply comp_iff_oper in H1. rewrite H in H1. discriminate.
+intros. split.
+- induction l.
+  * intros.  simpl in H. inversion H.
+  * intros. simpl in H. apply plus_or in H as [H | H].
+    ** exists a. split. apply in_eq. assumption.
+    ** apply IHl in H as [c' [P1 P2]]. exists c'. split. { apply in_cons. assumption. } { assumption. }
+- intros. destruct H as [ c' [P1 P2]]. induction l.
+  * destruct P1.
+  * apply in_inv in P1 as [P1 | P1].
+    ** simpl. rewrite P1. apply MPlusL. assumption. 
+    ** simpl.  apply MPlusR. auto.
 Qed.
-*)
 
+(*in_inv*)
 Lemma oper_false : forall (s : Trace)(c : Contract), ~(s ==~c) -> s =~ c = false.
 Proof.
 intros. destruct (s =~ c) eqn:Heqn.
@@ -1093,33 +951,6 @@ Proof. intros. apply comp_iff_oper in H. rewrite reduce_success in H.
 apply comp_iff_oper in H. assumption.
 Qed.
 
-Lemma add_success : forall (s : Trace)(c : Contract), s ==~ c -> s ==~ Success _;_ c.
-Proof.
-intros. rewrite <- (app_nil_l s). constructor ; auto.
-Qed.
-
-Lemma add_success : forall (s : Trace)(c : Contract), s ==~ c -> s ==~ Success _;_ c.
-Proof.
-intros. rewrite <- (app_nil_l s). constructor ; auto.
-Qed.
-
-Lemma seq_failure : forall (s : Trace)(c : Contract), s =~ Failure _;_ c = false.
-Proof.
-intros. apply oper_false. intro H. inversion H.  inversion H3. 
-Qed.
-
-Lemma plus_fold_exists_fold : forall (s : Trace)(l : list Contract),
-s ==~ plus_fold l <-> fold_right  (fun c => or (s ==~ c)) False l.
-Proof. Admitted.
-
-
-
-
-(* Lemma flat_map_plus_fold : forall (s : Trace)(l : list Contract),
-s ==~ plus_fold (flat_map (fun _ => l) alphabet) -> s ==~ plus_fold l.
-Proof.
-intros. apply plus_fold_exists_fold in H. apply Exists_fold_right in H. inversion H.
-- app*)
 
 Lemma times_derivative_or: forall (c0 c1 : Contract)(e : EventType)(s : Trace), s ==~ (plus_fold (times c0 c1)) / e
  -> s ==~ plus_fold ((times ((norm c0) / e) (norm c1))) \/ s==~ plus_fold (times (norm c0) ((norm c1) / e)).
@@ -1228,44 +1059,3 @@ Qed.
 Lemma pmatches_matches : forall (p : PContract), (forall (s : Trace), s p==~ p <-> s ==~ (trans p)).
 Proof. Admitted.
 
-
-
-                    
-(*
- apply comp_iff_oper in H.
-
-
-                apply plus_fold_or_fold in H. 
-                assert (HA : (map (fun c : Contract => s =~ c)
-                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then Success _;_ c else Failure _;_ c)
-                                                                  (times (norm c0 / e0) (norm c1))) alphabet)) =
-                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then s =~ c else false)
-                                                                  (times (norm c0 / e0) (norm c1))) alphabet)).
-                { repeat rewrite flat_map_concat_map. rewrite concat_map. apply f_equal.
-                  rewrite map_map. apply map_ext. intros. rewrite map_map. apply map_ext.
-                  intros. destruct (eq_event_dec a e). apply reduce_success. apply seq_failure. } 
-                rewrite HA in H.
-
-
-                assert (HA2 : (or_fold (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then s =~ c else false) 
-                                                                           (times (norm c0 / e0) (norm c1))) alphabet)) =
-                              (or_fold  (map (fun c : Contract => s =~ c) (times (norm c0 / e) (norm c1))))
-                       ).
-                {  }
-
-
-                assert (HA : (map (fun c : Contract => s =~ c)
-                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then Success _;_ c else Failure _;_ c)
-                                                                  (times (norm c0 / e0) (norm c1))) alphabet)) =
-                             (flat_map (fun e0 : EventType => map (fun c : Contract => if eq_event_dec e0 e then s =~ c else false)
-                                                                  (times (norm c0 / e0) (norm c1))) alphabet)).
-                { repeat rewrite flat_map_concat_map. rewrite concat_map. apply f_equal.
-                  rewrite map_map. apply map_ext. intros. rewrite map_map. apply map_ext.
-                  intros. destruct (eq_event_dec a e). apply reduce_success. apply seq_failure. } 
-                rewrite HA in H.
-          
-
-(*apply plus_fold_exists_fold in H.
-                apply Exists_fold_right in H. apply plus_fold_exists_fold. inversion H.
-            ****** apply Exists_fold_right. inversion H0.
-*)
