@@ -23,7 +23,7 @@ Definition eq_event_dec (e1 e2 : EventType) : {e1 = e2}+{~(e1=e2)}.
 Proof. destruct (eqb_event e1 e2) eqn:Heqn.
 - left. destruct e1 ; destruct e2; try reflexivity ; try discriminate Heqn.
 - right. destruct e1 ; destruct e2 ;  intro H ; try  discriminate Heqn ; try discriminate H.
-Qed.
+Defined.
 
 Definition Trace := List.list EventType % type.
 
@@ -301,6 +301,62 @@ Proof.
   intros n m. destruct (n =~ m) eqn:Heqn.
   - apply ReflectT. apply oper_imp_comp. assumption. 
   - apply ReflectF. intro H. apply comp_oper in H. rewrite Heqn in H. inversion H.
+Qed.
+
+
+
+(*Some dependencies used by ParallelContract and PlusFold*)
+
+Lemma plus_comm : forall (c1 c2 : Contract),(forall s, s ==~ (c1 _+_ c2) <-> s ==~ (c2 _+_ c1)).
+Proof.
+split.
+- intros. inversion H ; auto. 
+- intros. inversion H ; auto.
+Qed.
+
+Lemma plus_assoc : forall (c1 c2 c3 : Contract), (forall s, s==~((c1 _+_ c2) _+_ c3) <-> s ==~ (c1 _+_ (c2 _+_ c3))).
+Proof.
+split.
+- intro H. inversion H.
+  * inversion H2.
+    ** apply MPlusL. apply H6.
+    ** apply MPlusR. apply MPlusL. apply H6.
+  * apply MPlusR. apply MPlusR. apply H1.
+- intro H. inversion H.
+  * inversion H2.
+    ** apply MPlusL. apply MPlusL. apply MSuccess.
+    ** apply MPlusL. apply MPlusL. apply MEvent.
+    ** apply MPlusL. apply MPlusL. apply MSeq.
+      *** apply H4.
+      *** apply H5.
+    ** apply MPlusL. apply MPlusL. apply MPlusL. apply H4.
+    ** apply MPlusL. apply MPlusL. apply MPlusR. apply H4.
+  * inversion H1.
+    ** apply MPlusL. apply MPlusR. apply H6.
+    ** apply MPlusR. apply H6.
+Qed.
+
+Lemma seq_assoc : forall (c1 c2 c3 : Contract),forall s, s==~((c1 _;_ c2) _;_ c3) <-> s==~ (c1 _;_ (c2 _;_ c3)).
+Proof.
+split.
+- intro H. inversion H. inversion H3. rewrite <- app_assoc. apply MSeq.
+  * apply H8.
+  * apply MSeq.
+    ** apply H9.
+    ** apply H4.
+- intro H. inversion H. inversion H4. rewrite -> app_assoc. apply MSeq.
+  * apply MSeq.
+    ** apply H3.
+    ** apply H8.
+  * apply H9.
+Qed.
+
+Lemma plus_or : forall (s : Trace)(c1 c2 : Contract), s ==~ (c1 _+_ c2) <-> s ==~ c1 \/ s ==~c2.
+Proof. 
+split.
+- intros. repeat rewrite comp_iff_oper in *.
+apply plus_or_oper in H. apply H.
+- intros. destruct H. { now apply MPlusL. } { now apply MPlusR. }
 Qed.
 
 

@@ -8,8 +8,13 @@ Require Import FunctionalExtensionality.
 Require Import Arith.
 Import ListNotations.
 Require Import CSL.Contract.
+Require Import CSL.PlusFold.
 
 Set Implicit Arguments.
+
+Hint Constructors matches_comp : core.
+
+
 
 (*Parallel contracts section*)
 Inductive PContract : Set :=
@@ -464,17 +469,11 @@ Compute ((times Failure Failure)).
 Definition list_derivative (l : list Contract)(e : EventType) := map (fun c => c / e) l.
 
 
-Equations plus_fold (l : list Contract) : Contract :=
-  plus_fold [] := Failure;
-  plus_fold (c::l) := c _+_ (plus_fold l).
-
-Global Transparent plus_fold.
-
 
 Lemma list_derivative_spec : forall (l : list Contract)(e : EventType), (plus_fold l) / e = plus_fold (list_derivative l e).
-Proof. intros. funelim (plus_fold l).
+Proof. intros. induction l.
 - reflexivity.
-- simpl. specialize H with e. now rewrite H.
+- simpl. f_equal. assumption.
 Qed.
 
 Lemma list_derivative_app : forall (l1 l2 : list Contract)(e : EventType), 
@@ -492,21 +491,7 @@ Proof.
 intros. inversion H. assumption. inversion H1.
 Qed.
 
-Lemma plus_fold_app : forall (s:Trace)(l1 l2 : list Contract), 
-s ==~ plus_fold (l1 ++ l2) <-> s ==~ (plus_fold l1) _+_ (plus_fold l2).
-Proof.
-intro. induction l1.
-- intros. split.
-  * intros. simpl in H. apply MPlusR. assumption.
-  * intros. simpl. simpl in H. apply plus_comm in H. apply plus_failure in H. assumption.
-- intros. split.
-  * intros. simpl in *. apply plus_or in H as [H | H]. { apply MPlusL. apply MPlusL. assumption. }
-                                                       { specialize IHl1 with l2. apply IHl1 in H. 
-                                                         apply plus_assoc. apply MPlusR. assumption. } 
-  * intros. simpl in *. apply plus_assoc in H. apply plus_or in H as [H | H].
-    ** apply MPlusL. assumption.
-    ** apply MPlusR. apply IHl1. assumption.
-Qed.
+
 
 Lemma flat_map_list_derivative : forall (f: EventType -> list Contract) (l: list EventType)(e : EventType),
   list_derivative (flat_map f l) e = flat_map (fun x=> list_derivative (f x) e) l.
@@ -618,46 +603,7 @@ Qed.
 
 
 
-Lemma decompose_plus_fold : forall (l1 l2 : list Contract)(s : Trace)(e : EventType), s ==~ (plus_fold (l1 ++ l2)) -> 
-s ==~ plus_fold l1 \/ s ==~ plus_fold l2.
-Proof.
-intros. apply plus_fold_app in H. apply plus_or. assumption.
-Qed.
 
-
-
-Equations or_fold (l : list bool) : bool :=
-  or_fold [] := false;
-  or_fold (c::l) := c || (or_fold l).
-
-Global Transparent or_fold.
-
-
-Lemma plus_fold_or_fold : forall (s : Trace) (l : list Contract),
- (s =~ plus_fold l) = true -> or_fold (map (fun c => s =~ c) l) = true.
-Proof.
-intros. induction l.
-- simpl in H. apply comp_iff_oper in H. inversion H.
-- simpl in *. apply comp_iff_oper in H. apply plus_or in H as [H | H].
-  * simpl. apply orb_true_intro. left. apply comp_iff_oper. assumption.
-  * apply orb_true_intro. right. apply IHl. apply comp_iff_oper. assumption.
-Qed.
-
-Lemma in_plus_fold : forall (s : Trace)(l : list Contract), s ==~ plus_fold l <-> 
-(exists c, In c l /\ s ==~ c).
-Proof.
-intros. split.
-- induction l.
-  * intros.  simpl in H. inversion H.
-  * intros. simpl in H. apply plus_or in H as [H | H].
-    ** exists a. split. apply in_eq. assumption.
-    ** apply IHl in H as [c' [P1 P2]]. exists c'. split. { apply in_cons. assumption. } { assumption. }
-- intros. destruct H as [ c' [P1 P2]]. induction l.
-  * destruct P1.
-  * apply in_inv in P1 as [P1 | P1].
-    ** simpl. rewrite P1. apply MPlusL. assumption. 
-    ** simpl.  apply MPlusR. auto.
-Qed.
 
 (*in_inv*)
 Lemma oper_false : forall (s : Trace)(c : Contract), ~(s ==~c) -> s =~ c = false.
