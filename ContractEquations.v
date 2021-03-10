@@ -26,6 +26,8 @@ Inductive c_eq : Contract -> Contract -> Prop :=
   | c_seq_assoc c0 c1 c2 : (c0 _;_ c1) _;_ c2 =R= c0 _;_ (c1 _;_ c2)
   | c_seq_neut_l c : (Success _;_ c) =R= c 
   | c_seq_neut_r c : c _;_ Success =R= c 
+  | c_seq_failure_l c : Failure _;_ c =R= Failure    (*EXTRA AXIOM*)
+  | c_seq_failure_r c :  c _;_ Failure =R= Failure 
   | c_distr_l c0 c1 c2 : c0 _;_ (c1 _+_ c2) =R= (c0 _;_ c1) _+_ (c0 _;_ c2)
   | c_distr_r c0 c1 c2 : (c0 _+_ c1) _;_ c2 =R= (c0 _;_ c2) _+_ (c1 _;_ c2)
   | c_refl c : c =R= c
@@ -72,6 +74,8 @@ Proof.
   * split ; intros.
     ** inversion H. inversion H4. rewrite app_nil_r. assumption.
     ** rewrite <- (app_nil_r s). auto.
+  * split ; intros ; inversion H. inversion H3.
+  * split ; intros ; inversion H. inversion H4.
   * split ; intros ; inversion H.
     ** inversion H4 ; auto.
     ** inversion H2 ; auto.
@@ -94,6 +98,7 @@ Proof.
       *** apply IHc_eq2. assumption.
 Qed.
 
+(*Functions defining normalization*)
 
 Fixpoint monoms (c : Contract) : list Trace :=
 match c with
@@ -116,125 +121,86 @@ Definition contract_of_monom (s : Trace) := seq_fold (map Event s).
 
 Definition contract_of_monoms (l : list Trace) := plus_fold (map contract_of_monom l).
 
-Definition norm_contract (c : Contract) : Contract := contract_of_monoms (sorted_nodup_monoms c).
+Definition norm (c : Contract) : Contract := contract_of_monoms (sorted_nodup_monoms c).
 
 
-Lemma comp_equiv_destruct : forall (c0 c1: Contract),(forall s : Trace, s ==~ c0 <-> s ==~ c1) ->
-(forall s : Trace, s ==~ c0 -> s ==~ c1) /\ (forall s : Trace, s ==~ c1 -> s ==~ c0).
-Proof.
-intros. split ; intros; specialize H with s; destruct H; auto.
-Qed.
-
-Lemma plus_fold_app_eq : forall (c0 c1 : Contract), plus_fold (map contract_of_monom (monoms c0) ++
-   map contract_of_monom (monoms c1)) =R= plus_fold (map contract_of_monom (monoms c0)) _+_
-                                          plus_fold (map contract_of_monom (monoms c1)).
-Proof.
-intros. induction (map contract_of_monom (monoms c0)).
-- simpl. rewrite c_plus_comm. auto.
-- simpl. rewrite c_plus_assoc. apply c_plus_morph ; auto.
-Qed.
-
-
-Lemma monoms_eq_plus : forall (c0 c1: Contract), contract_of_monoms (monoms c0) =R= c0
--> contract_of_monoms (monoms c1) =R= c1 -> contract_of_monoms (monoms (c0 _+_ c1)) =R= c0 _+_ c1.
-Proof. 
-intros. unfold contract_of_monoms. simpl. rewrite map_app.
-  rewrite plus_fold_app_eq. apply c_plus_morph ; assumption.
-Qed.
 
 (*
-Lemma nodup_monoms_eq_plus : forall (c0 c1: Contract), contract_of_monoms ((nodup (list_eq_dec eq_event_dec) (monoms c0))) =R= c0
--> contract_of_monoms ((nodup (list_eq_dec eq_event_dec) (monoms c1))) =R= c1 -> contract_of_monoms (nodup (list_eq_dec eq_event_dec) (monoms (c0 _+_ c1))) =R= c0 _+_ c1.
-Proof. 
-intros. simpl.
-destruct (monoms c0). 
-- simpl in *. rewrite H0. unfold contract_of_monoms in H. simpl in H. rewrite <- H. 
-rewrite c_plus_comm. rewrite c_plus_neut. apply c_refl.
-- simpl in *. destruct (in_dec (list_eq_dec eq_event_dec) t l).
-  * eapply in_cons in i. simpl.
-  rewrite plus_fold_app_eq. apply c_plus_morph ; assumption.
-Qed.*)
+Lemma seq_test : forall (l0 l1 : list Trace), plus_fold (map (fun s=> seq_fold (map Event s)) 
+                                                           (flat_map (fun m0 => map (fun m1 => m0 ++ m1) l1) 
+                                                                     l0)) =R=
+(plus_fold (map (fun s=> seq_fold (map Event s)) l0)) _;_ (plus_fold (map (fun s=> seq_fold (map Event s)) l1)).
+Proof. induction l0.
+- intros. simpl.*)
 
-Lemma norm_eq2 : forall (c0 c1: Contract), sorted_nodup_monoms c0 = sorted_nodup_monoms c1 -> c0 =R= c1.
+
+(*Helper lemma for monoms_ceq*)
+Lemma monoms_ceq_plus : forall (c0 c1: Contract), contract_of_monoms (monoms (c0 _+_ c1)) =R= 
+(contract_of_monoms (monoms c0)) _+_ (contract_of_monoms (monoms c1)).
+Proof. 
+intros. unfold contract_of_monoms. simpl. rewrite map_app.
+assert (plus_fold_app_eq : plus_fold (map contract_of_monom (monoms c0) ++
+   map contract_of_monom (monoms c1)) =R= plus_fold (map contract_of_monom (monoms c0)) _+_
+                                          plus_fold (map contract_of_monom (monoms c1))).
+  { intros. induction (map contract_of_monom (monoms c0)).
+    - simpl. rewrite c_plus_comm. auto.
+    - simpl. rewrite c_plus_assoc. apply c_plus_morph ; auto. 
+  }
+rewrite plus_fold_app_eq. apply c_plus_morph ; apply c_refl. 
+Qed.
+
+Ltac unfold_defs := unfold contract_of_monoms, contract_of_monom.
+
+
+Lemma monoms_ceq_seq : forall (c0 c1 : Contract), contract_of_monoms (monoms (c0 _;_ c1)) =R=
+ contract_of_monoms (monoms c0) _;_ contract_of_monoms (monoms c1).
 Proof.
-Admitted. 
-
-Lemma norm_eq : forall (c0 c1: Contract), norm_contract c0 =R= c1.
-
-Lemma norm_eq : forall (c: Contract), norm_contract c =R= c.
-Proof. 
-unfold norm_contract, contract_of_monoms, contract_of_monom, sorted_nodup_monoms. 
-induction c.
+intros. unfold contract_of_monoms. simpl.
+induction (monoms c0).
 - simpl. auto.
-- simpl. auto.
-- simpl. rewrite c_plus_neut.  auto.
 - simpl. 
-
-- simpl. induction ((monoms c1)).
-  * simpl in *. inversion IHc1.
-    **  destruct ((monoms c2)). rewrite <- H0 in IHc1.
-    ** simpl in *. rewrite <- IHc1. rewrite <- IHc2. <- c_plus_neut. apply c_seq_morph.
-
- unfold contract_of_monom. rewrite flat_map_concat_map. rewrite concat_map.
-  rewrite map_map. rewrite map_map. simpl. rewrite map_app. fold contract_of_monom.
-  rewrite plus_fold_app_eq. apply c_plus_morph ; assumption.
+assert (HA:
+   (plus_fold
+  (map contract_of_monom
+     (map (fun m1 : list EventType => a ++ m1) (monoms c1) ++
+      flat_map (fun m0 : list EventType => map (fun m1 : list EventType => m0 ++ m1) (monoms c1)) l)))
+   =
+    (plus_fold (map contract_of_monom (map (fun m1 : list EventType => a ++ m1) (monoms c1)))) _+_
+   (plus_fold
+  (map contract_of_monom
+     (
+      flat_map (fun m0 : list EventType => map (fun m1 : list EventType => m0 ++ m1) (monoms c1)) l)))).
 Admitted.
 
 
-(*
-Lemma nodup_monoms_eq : forall (c: Contract), contract_of_monoms (nodup (list_eq_dec eq_event_dec) (monoms c)) =R= contract_of_monoms (monoms c).
+(*Normalization without removing duplicates and sorting, can be derived*)
+Lemma monoms_ceq : forall (c : Contract), contract_of_monoms (monoms c) =R= c.
 Proof.
-intros. induction c; eauto.
-- unfold norm_contract. unfold sorted_nodup_monoms.  eauto.
- Admitted.
-
-Lemma sort_nodup_monoms_eq : forall (c: Contract), norm_contract c =R= 
-                                                   contract_of_monoms (nodup (list_eq_dec eq_event_dec) (monoms c)).
-Proof.
-intros. induction c; eauto.
-- unfold norm_contract. unfold sorted_nodup_monoms.  eauto.
- Admitted.
-
-Lemma norm_eq : forall (c : Contract), norm_contract c =R= c.
-Proof.
-intros. rewrite sort_nodup_monoms_eq. rewrite nodup_monoms_eq. rewrite monoms_eq. apply c_refl.
-Qed.*)
-
-Lemma norm_match : forall (c: Contract), (forall s : Trace, s ==~ (norm_contract c) <-> s ==~ c).
-Proof.
-intro. apply c_eq_soundness. Admitted.
-
-
-Check nodup.
-Lemma in_sorted_no_dump_monoms : forall (s : Trace)(c : Contract), In s (monoms c) -> 
-In s (sorted_nodup_monoms c).
-Proof.
-intros. unfold sorted_nodup_monoms. apply <- (nodup_In ((list_eq_dec eq_event_dec))) in H.
-remember (nodup (list_eq_dec eq_event_dec) (monoms c)) as l.
-apply Permutation_in with (l:=l). { apply Permuted_sort. } { assumption. }
-Qed.  
-
-
-Lemma match_member : forall (s : Trace)(c : Contract), s ==~ c <-> In s (monoms c). 
-Proof.
-split.
-- intros. induction H ; try (simpl ; now left).
-  * apply monoms_seq; auto.
-  * simpl. apply in_or_app. now left.
-  * simpl. apply in_or_app. now right.
-- intros. apply (norm_match c s). unfold norm_contract. 
-  unfold contract_of_monoms.
-  apply in_plus_fold. exists (contract_of_monom s). split.
-  * apply in_map. apply in_sorted_no_dump_monoms. assumption.
-  * unfold contract_of_monom. apply seq_fold_map.
+induction c.
+- unfold_defs. simpl. auto.
+- unfold_defs. simpl. auto.
+- unfold_defs. simpl. rewrite c_plus_neut. auto.
+- rewrite monoms_ceq_plus;auto.
+- assert (HA : c1 _;_ c2 =R= (contract_of_monoms (monoms c1)) _;_ (contract_of_monoms (monoms c2))) ; auto.
+  rewrite HA at 2. rewrite <- monoms_ceq_seq. apply c_refl.
 Qed.
 
-Lemma comp_incl : forall (c0 c1 : Contract), (forall (s : Trace), s ==~ c0 -> s ==~ c1) -> 
-incl (monoms c0) (monoms c1).
-Proof.
-intros. unfold incl. intros. apply match_member. apply H. apply match_member. assumption.
-Qed.
 
+(*Monomials take contain each other, are derivable as contracts *)
+Lemma incl_monoms : forall (l1 l2 : list Trace), incl l1 l2 -> incl l2 l1-> contract_of_monoms l1 =R= contract_of_monoms l2.
+Proof. Admitted.
+
+
+(*Main normalization theorem *)
+Theorem norm_c_eq : forall (c : Contract), norm c =R= c.
+Proof.
+intros. unfold norm, sorted_nodup_monoms. 
+rewrite incl_monoms with (l1:=(sort (nodup (list_eq_dec eq_event_dec) (monoms c))))
+                         (l2:=(nodup (list_eq_dec eq_event_dec) (monoms c))).
+- rewrite incl_monoms with (l1:=((nodup (list_eq_dec eq_event_dec) (monoms c))))
+                         (l2:=( (monoms c))).
+  * apply monoms_ceq.
+Admitted.
 
 Lemma sorted_permutation : forall (l1 l2 : list Trace), StronglySorted TraceOrder.leb_prop l1 -> StronglySorted TraceOrder.leb_prop l2 -> 
 Permutation l1 l2 -> l1 = l2.
@@ -264,7 +230,47 @@ induction l1.
        apply Permutation_cons_inv in H1. auto.
 Qed.
 
+Lemma comp_equiv_destruct : forall (c0 c1: Contract),(forall s : Trace, s ==~ c0 <-> s ==~ c1) ->
+(forall s : Trace, s ==~ c0 -> s ==~ c1) /\ (forall s : Trace, s ==~ c1 -> s ==~ c0).
+Proof.
+intros. split ; intros; specialize H with s; destruct H; auto.
+Qed.
 
+
+(********************************************************************)
+(*A Semantic match implies that contracts share the same monoms, this section shows this*)
+
+
+Lemma in_sorted_no_dump_monoms : forall (s : Trace)(c : Contract), In s (monoms c) -> 
+In s (sorted_nodup_monoms c).
+Proof.
+intros. unfold sorted_nodup_monoms. apply <- (nodup_In ((list_eq_dec eq_event_dec))) in H.
+remember (nodup (list_eq_dec eq_event_dec) (monoms c)) as l.
+apply Permutation_in with (l:=l). { apply Permuted_sort. } { assumption. }
+Qed.  
+
+
+Lemma match_member : forall (s : Trace)(c : Contract), s ==~ c <-> In s (monoms c). 
+Proof.
+split.
+- intros. induction H ; try (simpl ; now left).
+  * apply monoms_seq; auto.
+  * simpl. apply in_or_app. now left.
+  * simpl. apply in_or_app. now right.
+- intros. apply (c_eq_soundness (norm_c_eq c)). unfold norm. 
+  unfold contract_of_monoms.
+  apply in_plus_fold. exists (contract_of_monom s). split.
+  * apply in_map. apply in_sorted_no_dump_monoms. assumption.
+  * unfold contract_of_monom. apply seq_fold_map.
+Qed.
+
+Lemma comp_incl : forall (c0 c1 : Contract), (forall (s : Trace), s ==~ c0 -> s ==~ c1) -> 
+incl (monoms c0) (monoms c1).
+Proof.
+intros. unfold incl. intros. apply match_member. apply H. apply match_member. assumption.
+Qed.
+
+(*Main lemma of this section*)
 Lemma comp_equiv_i_norm_eq : forall (c0 c1 : Contract), (forall s : Trace, s ==~ c0 <-> s ==~ c1) -> 
 forall (s' : Trace), In s' (monoms c0) <-> In s' (monoms c1).
 Proof.
@@ -273,19 +279,20 @@ apply comp_incl in H1. apply comp_incl in H2. split ; auto.
 Qed.
 
 
+(*****************************************************************************)
 
 
-Search (Permutation _ _ -> _ ).
-Lemma comp_equiv_i_perm_monoms : forall (c0 c1 : Contract), (forall s : Trace, s ==~ c0 <-> s ==~ c1) -> 
- Permutation (nodup (list_eq_dec eq_event_dec) (monoms c0)) 
+(*Semantic match -> duplicate-free monomials are permutations*)
+Lemma comp_equiv_i_perm_monoms : forall (c0 c1 : Contract), (forall s : Trace, s ==~ c0 <-> s ==~ c1) ->
+ Permutation (nodup (list_eq_dec eq_event_dec) (monoms c0))
              (nodup (list_eq_dec eq_event_dec) (monoms c1)).
 Proof.
 intros. apply NoDup_Permutation ; try apply NoDup_nodup.
-intros. rewrite nodup_In. rewrite nodup_In. apply comp_equiv_i_norm_eq. assumption. 
-Qed.
+intros. rewrite nodup_In. rewrite nodup_In. apply comp_equiv_i_norm_eq. assumption.
+ Qed.
 
-
-Lemma comp_equiv_i_eq_sorted_monoms : forall (c0 c1 : Contract), (forall s : Trace, s ==~ c0 <-> s ==~ c1) -> 
+(*Semantic match -> sorted duplicate-free monomials are equal*)
+Lemma comp_equiv_i_eq_sorted_monoms : forall (c0 c1 : Contract), (forall s : Trace, s ==~ c0 <-> s ==~ c1) ->
  sorted_nodup_monoms c0 = sorted_nodup_monoms c1.
 Proof.
 intros. unfold sorted_nodup_monoms. apply sorted_permutation.
@@ -294,14 +301,10 @@ intros. unfold sorted_nodup_monoms. apply sorted_permutation.
 - repeat rewrite <- Permuted_sort. apply comp_equiv_i_perm_monoms. assumption.
 Qed.
 
-
-
-
-
-
-
+(*Completeness: Semantic match -> Derivable in =R=*)
 Lemma c_eq_completeness : forall (c0 c1 : Contract), (forall s : Trace, s ==~ c0 <-> s ==~ c1) -> c0 =R= c1.
 Proof.
-intros. rewrite <- norm_eq. rewrite <- (norm_eq c1). unfold norm_contract. f_equal. 
+intros. rewrite <- norm_c_eq. rewrite <- (norm_c_eq c1). unfold norm. 
 apply comp_equiv_i_eq_sorted_monoms in H. rewrite H. apply c_refl.
 Qed.
+

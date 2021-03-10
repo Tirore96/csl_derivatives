@@ -93,6 +93,8 @@ match c with
 end.
 
 
+
+
 Lemma norm_plus_induct : forall (P : Contract -> Prop)(c0 c1 : Contract),
 (norm c0 = Success -> norm c1 = Success -> P Success) ->
 ((norm c0 <> Success \/ norm c1 <> Success) ->  norm c0 = Failure -> P (norm c1)) ->
