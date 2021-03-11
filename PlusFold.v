@@ -68,3 +68,5 @@ induction s.
 - simpl. auto.
 - simpl. assert (HA: a::s = [a]++s). { reflexivity. } rewrite HA. constructor; auto.
 Qed.
+
+
