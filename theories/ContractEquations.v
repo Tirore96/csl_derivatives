@@ -1,10 +1,5 @@
-
-
-Pwd.
-
 Require Import CSL.Contract.  
 Require Import CSL.Order.
-Require Import CSL.PlusFold.
 Require Import Lists.List.
 Require Import Sorting.Permutation.
 Require Import Sorting.Mergesort.

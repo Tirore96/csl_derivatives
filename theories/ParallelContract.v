@@ -8,7 +8,6 @@ Require Import FunctionalExtensionality.
 Require Import Arith.
 Import ListNotations.
 Require Import CSL.Contract.
-Require Import CSL.PlusFold.
 
 Set Implicit Arguments.
 
