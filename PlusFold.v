@@ -51,9 +51,6 @@ Qed.
 
 
 
-plus_fold (map (fun s : Trace => seq_fold (map Event s)) (monoms c1 ++ monoms c2)) =R=
-c1 _+_ c2
-
 
 
 
