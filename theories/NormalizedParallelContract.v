@@ -270,3 +270,173 @@ split; intros.
 - apply matches_count. apply pmatches_count. assumption.
 - apply pmatches_count with (alphabet:=alphabet). apply matches_count. assumption.
 Qed.
+
+
+
+(********************************** Refined approach ******************************************************)
+
+
+
+(********preparing for pmatches_exists_monoms ***)
+Lemma m_map_inter : forall (l1 l2 : list EventType)(e : EventType), m_map (l1 ++ e::l2) = m_map (e::l1++l2).
+Proof.
+induction l1.
+- intros. reflexivity.
+- intros. rewrite <- app_comm_cons. simpl. rewrite IHl1. simpl. unfold map_add.
+  apply functional_extensionality. intros.  
+  destruct (eq_event_dec x a);destruct (eq_event_dec x e);reflexivity. 
+Qed.
+
+Lemma eq_map_interleave3 : forall (s1 s2 s : Trace),
+interleave s1 s2 s -> (m_map (s1++s2)) = (m_map s).
+Proof.
+intros. induction H; intros.
+  * simpl. reflexivity.
+  * rewrite app_nil_r. reflexivity.
+  * simpl. rewrite IHinterleave. reflexivity. 
+  * simpl. rewrite m_map_inter. simpl. rewrite IHinterleave. reflexivity.
+Qed.
+
+
+
+Lemma flat_map_map_app : forall (l0 l1 : list Trace), Forall (fun s => exists s0' s1', In s0' l0 -> In s1' l1 -> s = s0'++s1')
+                                                             (flat_map (fun s0 : list EventType => map (fun s1 : list EventType => s0 ++ s1) l1) l0).
+Proof.
+induction l0.
+- simpl. destruct l1; constructor.
+- intros. simpl. apply Forall_app. split.
+  * apply Forall_forall. intros.
+    apply in_map_iff in H. destruct H as [x0 [P1 P2]].
+    exists a. exists x0. intros. rewrite P1. reflexivity.
+  * apply Forall_forall. intros.
+    apply in_flat_map in H as [l [H1 H2]]. apply in_map_iff in H2 as [x0 [P1 P2]].
+    exists l. exists x0. intros. rewrite P1. reflexivity.
+Qed.
+
+Lemma flat_map_map_app2 : forall (l0 l1 : list Trace)(s : Trace), In s (flat_map (fun s0 : list EventType => map (fun s1 : list EventType => s0 ++ s1) l1) l0)
+ -> (exists s0' s1', In s0' l0 /\ In s1' l1 /\ s = s0'++s1').
+Proof. Admitted.
+
+Lemma m_map_app : forall (l0 l1 : list EventType), m_map (l0 ++ l1) = (fun e => (m_map l0) e + (m_map l1) e).
+Proof.
+induction l0.
+- intros. simpl. apply functional_extensionality. intros. reflexivity.
+- intros. simpl. assert (HA: (fun e : EventType => map_add a 1 (m_map l0) e + m_map l1 e) = 
+                             map_add a 1 (fun e : EventType => (m_map l0) e + m_map l1 e)).
+  { apply functional_extensionality. intros. unfold map_add. destruct (eq_event_dec x a);lia. }
+  rewrite HA. f_equal. auto. 
+Qed.
+
+(*A Main lemma*)
+Lemma pmatches_exists_monoms : forall (s : Trace)(p : PContract), s #==~ p -> Exists (fun s' => m_map s = m_map s') (p_monoms p).
+Proof.
+intros. generalize dependent s. induction p; intros.
+- inversion H. simpl. constructor. reflexivity.
+- inversion H.
+- inversion H. simpl. constructor. reflexivity.
+- inversion H.
+  * simpl. apply Exists_app. left. auto. 
+  * simpl. apply Exists_app. right. auto.
+- inversion H. subst. simpl. apply eq_map_interleave3 in H5.
+  apply IHp1 in H3. apply IHp2 in H4. apply Exists_exists in H3 as [x3 [P5 P6]]. 
+  apply Exists_exists in H4 as [x4 [P7 P8]].
+  apply Exists_exists. exists (x3++x4). split.
+  * apply in_flat_map. exists x3. split ; try assumption.
+    apply in_map. assumption.
+  * rewrite <- H5. repeat rewrite m_map_app. rewrite P6. rewrite P8. reflexivity.
+Qed.
+
+(*******************Preparing for exists_monoms_pmatches ********)
+
+Lemma interleave_app : forall (A:Set)(l0 l1 : list A), interleave l0 l1 (l0 ++ l1).
+Proof.
+induction l0.
+- intros. simpl. constructor.
+- intros. simpl. constructor. auto. 
+Qed.
+
+Lemma pmatches_monoms : forall (s : Trace)(p : PContract), In s (p_monoms p) -> s #==~ p.
+Proof. 
+intros. generalize dependent s. induction p; intros.
+- simpl in H. destruct H ; try contradiction. subst. constructor.
+- simpl in H. contradiction.
+- simpl in H. destruct H ; try contradiction. subst. constructor.
+- simpl in H. apply in_app_iff in H. destruct H.
+  * constructor. auto.
+  * apply MPPlusR. auto.
+- simpl in H. apply flat_map_map_app2 in H as [s0 [s1 [P1 [P2 P3]]]].
+  subst. apply MPPar with s0 s1; auto. apply interleave_app.
+Qed.
+
+Lemma m_map_zero : forall (s : Trace), (fun _ : EventType => 0) = m_map s -> s = [].
+Proof. 
+intros. destruct s.
+- reflexivity.
+- simpl in H. apply equal_f with e in H. unfold map_add in H. destruct (eq_event_dec e e).
+  * destruct (m_map s e); discriminate.
+  * contradiction.
+Qed.
+
+(*
+Lemma m_map_occ : forall (s : Trace)(e : EventType)(n : nat), (m_map s) e = n -> count_occ eq_event_dec s e = n.
+Proof. Admitted.*)
+
+Lemma m_map_add_one : forall (e : EventType)(s : Trace),(fun e' => if eq_event_dec e' e then 1 else 0) = (m_map s) -> s = [e].
+Proof.
+intros. 
+Admitted.
+
+Lemma m_map_interleave : forall (s s': Trace), m_map s = m_map s' -> Permutation s s'.
+Proof. Admitted.
+
+
+Lemma mppar_perm : forall (s s1 s2 : Trace) (c1 c2: PContract),
+       s1 #==~ c1 -> s2 #==~ c2 -> Permutation s (s1++s2) -> s #==~ c1 -*- c2.
+Proof. Admitted.
+
+Lemma interleave_perm : forall (s s1 s2 : Trace),
+       interleave s1 s2 s -> Permutation s (s1++s2).
+Proof. Admitted.
+
+Lemma m_map_perm : forall (s s' : Trace), m_map s = m_map s' -> Permutation s' s.
+Proof. Admitted.
+
+Lemma maps_eq_pmatches_eq : forall (s s' : Trace)(p : PContract), m_map s = m_map s' -> s #==~ p -> s' #==~ p.
+Proof.
+intros. generalize dependent s'. generalize dependent s. induction p.
+- intros. inversion H0. subst. simpl in H. apply m_map_zero in H. subst. constructor.
+- intros. inversion H0.
+- intros. inversion H0. subst. simpl in H. unfold map_add in H. apply m_map_add_one in H. subst. constructor.
+- intros. inversion H0.
+  * constructor. eapply IHp1 in H3.
+    ** eassumption.
+    ** assumption.
+  * apply MPPlusR. eapply IHp2 in H3.
+    ** eassumption.
+    ** assumption.
+- intros. inversion H0. subst. apply IHp1 with (s':=s1) in H3.
+  * apply IHp2 with (s':=s2) in H5.
+    ** apply mppar_perm with s1 s2;auto. rewrite <- (interleave_perm H6).
+       apply m_map_perm. assumption.
+    ** reflexivity.
+  * reflexivity.
+Qed.
+
+Lemma maps_eq_iff_pmatches_eq : forall (s s' : Trace)(p : PContract), m_map s = m_map s' -> s #==~ p <-> s' #==~ p.
+Proof.
+intros. split; apply maps_eq_pmatches_eq; [assumption | auto].
+Qed.
+
+
+
+Lemma exists_monoms_pmatches : forall (s : Trace)(p : PContract), Exists (fun s' => m_map s = m_map s') (p_monoms p) -> s #==~ p.
+Proof.
+intros. apply Exists_exists in H as [x [P1 P2]]. eapply maps_eq_iff_pmatches_eq in P2. apply P2.
+apply pmatches_monoms. assumption.
+Qed.
+
+Lemma pmatches_iff_exists_monoms : forall (s : Trace)(p : PContract), s #==~ p <-> Exists (fun s' => m_map s = m_map s') (p_monoms p).
+Proof.
+intros. split. { apply pmatches_exists_monoms. } { apply exists_monoms_pmatches. }
+Qed.
+
