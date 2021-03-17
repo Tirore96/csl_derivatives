@@ -380,10 +380,10 @@ Qed.
 (*
 Lemma m_map_occ : forall (s : Trace)(e : EventType)(n : nat), (m_map s) e = n -> count_occ eq_event_dec s e = n.
 Proof. Admitted.*)
-
+(*consider two cases e e' holds and doesn't hold*)
 Lemma m_map_add_one : forall (e : EventType)(s : Trace),(fun e' => if eq_event_dec e' e then 1 else 0) = (m_map s) -> s = [e].
 Proof.
-intros. 
+intros. apply equal_f with e in H. destruct ( simpl in H.
 Admitted.
 
 Lemma m_map_interleave : forall (s s': Trace), m_map s = m_map s' -> Permutation s s'.
@@ -439,4 +439,6 @@ Lemma pmatches_iff_exists_monoms : forall (s : Trace)(p : PContract), s #==~ p <
 Proof.
 intros. split. { apply pmatches_exists_monoms. } { apply exists_monoms_pmatches. }
 Qed.
+
+(*trans p = plus_fold (map (coms . toc. count) (monoms p))   *)
 

@@ -2,7 +2,10 @@ Require Import Lists.List.
 Require Import FunInd.
 Require Import Bool.Bool.
 Require Import Bool.Sumbool.
+Require Import Structures.GenericMinMax.
+From Equations Require Import Equations.
 Import ListNotations.
+Require Import micromega.Lia.
 
 Set Implicit Arguments.
 
@@ -305,6 +308,9 @@ Qed.
 
 
 
+
+
+
 (***********************Some dependencies used by ParallelContract and ContractEquation******************)
 
 Lemma plus_comm : forall (c1 c2 : Contract),(forall s, s ==~ (c1 _+_ c2) <-> s ==~ (c2 _+_ c1)).
@@ -420,3 +426,312 @@ induction s.
 Qed.
 
 
+(**************Contract unfolding**************)
+
+Definition alphabet := [Notify;Transfer].
+
+(*Inductive EventPre : EventType -> Contract -> Prop :=
+ | ep e c : EventPre e (Event e _;_ c). 
+
+Hint Constructors EventPre : core.
+
+Inductive PlusNorm : list EventType -> list Contract -> Prop :=
+  | pn_nil : PlusNorm [] []
+  | pn_cons e c el cl (H0 : EventPre e c) (H1 : PlusNorm el cl) : PlusNorm (e::el) (c::cl).
+
+Hint Constructors PlusNorm : core.*)
+
+
+Inductive Stuck : Contract -> Prop :=
+ | STFailure : Stuck Failure
+ | STPLus c0 c1 (H0 : Stuck c0) (H1 : Stuck c1) : Stuck (c0 _+_ c1)
+ | STSeq c0 c1 (H0 : Stuck c0) : Stuck (c0 _;_ c1).
+
+Hint Constructors Stuck : core.
+
+Inductive NotStuck : Contract -> Prop :=
+ | NSTSuccess : NotStuck Success
+ | NSEvent e : NotStuck (Event e)
+ | NSTPlusL c0 c1 (H0 : NotStuck c0) : NotStuck (c0 _+_ c1)
+ | NSTPlusR c0 c1 (H1 : NotStuck c1) : NotStuck (c0 _+_ c1)
+ | NSTSeq c0 c1 (H0 : NotStuck c0) : NotStuck (c0 _;_ c1).
+
+Hint Constructors NotStuck : core.
+
+Fixpoint stuck (c : Contract) :=
+match c with
+| Failure => true
+| c0 _+_ c1 => stuck c0 && stuck c1
+| c0 _;_ _ => stuck c0
+| _ => false
+end.
+
+Search (_ || _ = false).
+Lemma stuck_false : forall (c : Contract), stuck c = false -> NotStuck c.
+Proof.
+induction c; intros.
+- constructor.
+- simpl in H. discriminate.
+- constructor.
+- simpl in H. apply andb_false_elim in H as [H | H]; auto.
+- simpl in H. auto.
+Defined.
+
+Lemma stuck_true : forall (c : Contract), stuck c = true -> (Stuck c).
+Proof.
+induction c; intros; try (simpl in H ; discriminate).
+- constructor.
+- simpl in H. apply andb_prop in H as [H1 H2].  auto.
+- simpl in H. auto.
+Defined.
+
+
+Definition stuck_dec (c : Contract) : {Stuck c}+{NotStuck c}.
+Proof. destruct (stuck c) eqn:Heqn.
+- left. auto using stuck_true.
+- right. auto using stuck_false.
+Defined.
+
+Lemma NotStuck_negation : forall (c : Contract), NotStuck c -> ~(Stuck c).
+Proof.
+intros. induction H ; intro H2; inversion H2.
+all : inversion H2; contradiction.
+Qed.
+
+Check max.
+Fixpoint con_size (c:Contract):nat :=
+match c with
+| Failure => 0
+| Success => 1
+| Event _ => 2
+| c0 _+_ c1 => max (con_size c0) (con_size c1) 
+| c0 _;_ c1 => if stuck_dec c0 then 0 else (con_size c0) + (con_size c1)
+end.
+
+(*
+Lemma stuck_plus_and : forall (c0 c1 :Contract), Stuck (c0 _+_ c1) -> Stuck c0 /\ Stuck c1.
+Proof. Admitted.
+
+Lemma stuck_plus_or : forall (c0 c1 : Contract), ~ Stuck (c0 _+_ c1) -> ~(Stuck c0) \/ ~(Stuck c1).
+Proof.
+intros. destruct c0 ; destruct c1 ; try (left; intro H2; inversion H2 ; assert_succeeds); try (right; intro H2; inversion H2).
+intros.*)
+
+Lemma stuck_0 : forall (c : Contract), Stuck c -> con_size c = 0.
+Proof.
+intros. induction H.
+- reflexivity.
+- simpl. rewrite IHStuck1. rewrite IHStuck2. reflexivity.
+- simpl. destruct (stuck_dec c0). reflexivity. apply NotStuck_negation in n. contradiction.
+Defined.
+
+Lemma NotStuck_0lt : forall (c : Contract), NotStuck c -> 0 < con_size c.
+Proof.
+intros. induction H; simpl ; try lia.
+destruct (stuck_dec c0).
+- apply NotStuck_negation in H. contradiction.
+- lia.
+Defined.
+
+
+Lemma stuck_not_nullary : forall (c : Contract), Stuck c -> nu c = false.
+Proof.
+intros. induction H.
+- reflexivity.
+- simpl. rewrite IHStuck1. rewrite IHStuck2. reflexivity.
+- simpl. rewrite IHStuck. reflexivity.
+Defined.
+
+Lemma stuck_derive : forall (c : Contract)(e : EventType), Stuck c -> c / e = c.
+Proof.
+intros. induction H.
+- reflexivity.
+- simpl. rewrite IHStuck1. rewrite IHStuck2. reflexivity.
+- simpl. apply stuck_not_nullary in H. rewrite H. rewrite IHStuck. reflexivity.
+Defined.
+
+Locate Max.max.
+
+
+
+
+
+Search (?a + ?b <  _ + ?b).
+Lemma not_stuck_derives : forall (c : Contract), NotStuck c -> (forall (e : EventType), con_size (c / e) < con_size c).
+Proof.
+intros. induction c.
+- simpl. lia.
+- inversion H.
+- simpl. destruct (eq_event_dec e0 e) ; simpl ; lia.
+- simpl. inversion H.
+  * destruct (stuck_dec c2).
+    ** apply stuck_0 in s as s2. rewrite (stuck_derive _ s). rewrite s2. repeat rewrite (Max.max_comm _ 0). simpl.
+       auto.
+    ** apply IHc1 in H1.  apply IHc2 in n. lia.
+  * destruct (stuck_dec c1).
+    ** apply stuck_0 in s as s2. rewrite (stuck_derive _ s). rewrite s2. simpl.
+       auto.
+    ** apply IHc1 in n.  apply IHc2 in H0. lia.
+- inversion H. subst. simpl. destruct (nu c1) eqn:Heqn.
+  * destruct (stuck_dec c1). apply NotStuck_negation in H1. contradiction.
+    simpl. destruct (stuck_dec (c1 / e)).
+    ** simpl. destruct (stuck_dec c2).
+      *** rewrite stuck_derive. apply PeanoNat.Nat.lt_add_pos_l. apply NotStuck_0lt. all :assumption.
+      *** rewrite <- (plus_O_n (con_size (c2 / e))). apply IHc2 in n0. lia.
+    ** apply IHc1 in H1. destruct (stuck_dec c2).
+      *** rewrite (stuck_derive _ s). apply Max.max_case_strong.
+        **** intros. apply Plus.plus_lt_compat_r. assumption.
+        **** intros. lia.
+      *** apply IHc1 in n. apply IHc2 in n1. lia.
+  * destruct (stuck_dec c1).
+    ** apply NotStuck_negation in H1. contradiction.
+    ** simpl. destruct (stuck_dec (c1 / e)).
+      *** pose proof (NotStuck_0lt H1). lia.
+      *** apply Plus.plus_lt_compat_r. auto.
+Defined.
+
+
+Equations plus_norm (c : Contract) : (Contract) by  wf (con_size (c)) :=
+plus_norm c := if stuck_dec c then Failure
+               else let c' := Success _+_ fold_left (fun acc e => acc _+_ (Event e) _;_ (plus_norm (c / e)))  alphabet Failure
+                    in if nu c then Success _+_ c' else c'.
+Next Obligation. auto using not_stuck_derives. Defined.
+
+Global Transparent plus_norm.
+Eval compute in plus_norm (Transfer _._ Notify _._ Success _+_ Success).
+
+Event Transfer)).
+
+Equations plus_norm2 (c : Contract) : (Contract) by  wf (0) :=
+plus_norm2 Failure := Failure;
+plus_norm2 c := Event Notify _;_ plus_norm (c / Notify) .
+Admit Obligations.
+
+Eval compute in (plus_norm2 (Success _+_ Event Transfer)).
+
+Print plus_norm2_functional.
+
+  times c0 c1 :=
+        if eq_contract_dec (norm c0) Failure
+        then []
+        else if eq_contract_dec (norm c1) Failure
+        then []
+        else if eq_contract_dec (norm c0) Success then [norm c1]
+        else if eq_contract_dec (norm c1) Success then [norm c0]
+        (*Incorrect, for completeness if c0 is nullary, then expression below ++ [norm c1] should be returned*)
+        else (flat_map (fun e => map (fun c => (Event e) _;_ c) (times ((norm c0)  / e) (norm c1) )) alphabet)
+             ++
+             (flat_map (fun e => map (fun c => (Event e) _;_ c) (times (norm c0)  ((norm c1)  /e ))) alphabet).
+Next Obligation.
+
+Definition plus_list (c : Contract) (alphabet : list EventType): list Contract := map (fun e => (Event e _;_ c/e)) alphabet .
+
+Hint Unfold plus_list : core.
+
+Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s ==~ c <-> s ==~ c / e.
+Proof.
+split ; repeat rewrite comp_iff_oper ; intro H ; rewrite <- H ; apply derive_spec.
+Qed.
+
+Definition list_derivative (l : list Contract)(e : EventType) := map (fun c => c / e) l.
+
+Hint Unfold list_derivative : core.
+
+
+
+Lemma list_derivative_spec : forall (l : list Contract)(e : EventType), (plus_fold l) / e = plus_fold (list_derivative l e).
+Proof. intros. induction l.
+- reflexivity.
+- simpl. f_equal. assumption.
+Qed.
+
+
+
+
+Lemma plus_list_spec_alphabet : forall (e : EventType)(s : Trace)(c : Contract)(alphabet : list EventType), In e alphabet -> 
+(e::s ==~ c <-> e::s ==~ plus_fold (plus_list c alphabet)).
+Proof.
+intros. repeat rewrite derive_spec_comp. rewrite list_derivative_spec. rewrite in_plus_fold.
+unfold plus_list. unfold list_derivative. rewrite map_map. split.
+- intros. exists (Success _;_ (c /e)). split. 
+  * rewrite in_map_iff. exists e. simpl. destruct (eq_event_dec e e);try contradiction.
+    split ; [ reflexivity | assumption].
+  * rewrite <- (app_nil_l s). constructor; auto.
+- intros [c0 [P0 P1]]. rewrite in_map_iff in P0. destruct P0 as [x [P3 P4]]. subst.
+ simpl. simpl in P1. destruct (eq_event_dec x e).
+  * inversion P1. inversion H3. subst. simpl. assumption.
+  * inversion P1. inversion H3.
+Qed.
+
+Definition plus_norm_aux c := plus_fold (plus_list c alphabet).
+
+Lemma plus_norm_aux_spec : forall (e : EventType)(s : Trace)(c : Contract),
+(e::s ==~ c <-> e::s ==~ plus_norm_aux c).
+Proof. 
+unfold plus_norm_aux. 
+assert (forall e : EventType, In e alphabet). { unfold alphabet. destruct e ; repeat (try apply in_eq ; try apply in_cons). }
+intros. apply plus_list_spec_alphabet. auto.
+Qed.
+
+Definition plus_norm c := let c' := plus_norm_aux c
+                          in if nu c then Success _+_ c' else c'.
+
+Search (_ || _ = true).
+Lemma empty_nu : forall (c : Contract), [] ==~ c <-> nu c = true.
+Proof.
+intros. split. 
+- induction c; intros.
+  * reflexivity.
+  * inversion H.
+  * inversion H.
+  * inversion H. { simpl. rewrite IHc1; try assumption. reflexivity. }
+                { simpl. rewrite IHc2; try assumption. rewrite orb_comm.  reflexivity. }
+  * simpl. inversion H. apply app_eq_nil in H1 as [H11 H12]. subst. rewrite IHc1. rewrite IHc2. reflexivity.
+  all: assumption.
+- intros. induction c.
+  * constructor.
+  * discriminate H.
+  * discriminate H.
+  * simpl in H. apply orb_prop in H as [H | H]; auto.
+  * simpl in H. rewrite <- (app_nil_l []). apply andb_prop in H as [H1 H2]; auto.
+Qed.
+
+Lemma seq_failure : forall (c : Contract)(s : Trace), ~(s ==~ c _;_ Failure).
+Proof. intros. intro. inversion H. inversion H4. Defined.
+
+
+
+Lemma empty_plus_norm_aux_false : forall (c : Contract), ~([] ==~ plus_norm_aux c).
+Proof.
+unfold plus_norm_aux. induction c; intros; intro; simpl in H.
+- inversion H. apply seq_failure in H2 as [].  inversion H1. apply seq_failure in H6 as [].  inversion H6. 
+- inversion H. apply seq_failure in H2 as [].  inversion H1. apply seq_failure in H6 as [].  inversion H6. 
+- inversion H.
+  * subst. inversion H2. apply app_eq_nil in H0 as [H00 H01]. subst. inversion H4.
+  * subst. inversion H1. inversion H3. apply app_eq_nil in H5 as [H05 H15]. subst. inversion H8.
+    inversion H3.
+- inversion H.
+  * subst. inversion H2. apply app_eq_nil in H0 as [H05 H15]. subst. inversion H4.
+  * subst. inversion H1. inversion H3. apply app_eq_nil in H5 as [H05 H15]. subst. inversion H8. inversion H3. 
+- inversion H.
+  * subst. inversion H2. apply app_eq_nil in H0 as [H05 H15]. subst. inversion H4.
+  * subst. inversion H1. inversion H3. apply app_eq_nil in H5 as [H05 H15]. subst. inversion H8. inversion H3.
+Qed. 
+
+Lemma plus_norm_spec : forall (c : Contract)(s : Trace),
+(s ==~ c <-> s ==~ plus_norm c).
+Proof.
+intros. unfold plus_norm. destruct (nu c) eqn:Heqn.
+- destruct s.
+  * split.
+    ** intros. auto.
+    ** intros. apply empty_nu. assumption.
+  * assert (HA: e :: s ==~ Success _+_ plus_norm_aux c <-> e :: s ==~ plus_norm_aux c).
+    { split. ** intros. inversion H. inversion H2. assumption. **  intros. apply MPlusR. assumption. }
+    rewrite HA. apply plus_norm_aux_spec.
+- destruct s.
+  * split. 
+    ** intros. apply empty_nu in H. rewrite Heqn in H. discriminate. 
+    ** intros. apply empty_plus_norm_aux_false in H as [].
+  * apply plus_norm_aux_spec.
+Qed.
