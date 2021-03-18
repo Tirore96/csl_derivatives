@@ -622,13 +622,63 @@ match c with
 end.
 
 Lemma translate_aux_sequential : forall (c : Contract), Sequential c -> exists c', translate_aux c = Some c'.
-Proof. Admitted.
+Proof. 
+intros. induction H.
+- exists CSLC.Failure. reflexivity.
+- exists CSLC.Success. reflexivity.
+- exists (CSLC.Event e). reflexivity.
+- destruct IHSequential1,IHSequential2. exists (CSLC.CPlus x x0).
+  simpl. unfold bind. destruct (translate_aux c0).
+  * destruct (translate_aux c1).
+    ** inversion H1. inversion H2. reflexivity.
+    ** inversion H2.
+  * inversion H1.
+- destruct IHSequential1,IHSequential2. exists (CSLC.CSeq x x0).
+  simpl. unfold bind. destruct (translate_aux c0).
+  * destruct (translate_aux c1).
+    ** inversion H1. inversion H2. reflexivity.
+    ** inversion H2.
+  * inversion H1.
+Qed.
 
 Lemma translate_aux_spec : forall (c : Contract)(c' : CSLC.Contract),translate_aux c = Some c' -> (forall s, s ==~ c <-> CSLC.matches_comp s c').
-Proof. Admitted.
+Proof.
+split. generalize dependent c'. generalize dependent s.
+- induction c; intros.
+  * inversion H. inversion H0. constructor.
+  * inversion H0.
+  * inversion H0. inversion H. constructor.
+  * inversion H. unfold bind in H2. destruct (translate_aux c1). 
+    ** destruct (translate_aux c2). 
+      *** inversion H2. inversion H0;auto.
+      *** inversion H2.
+    ** inversion H2.
+  * inversion H. unfold bind in H2. destruct (translate_aux c1). 
+    ** destruct (translate_aux c2). 
+      *** inversion H2. inversion H0;auto.
+      *** inversion H2.
+    ** inversion H2.
+  * simpl in H. discriminate.
+- generalize dependent c'. generalize dependent s. induction c; intros.
+  * inversion H. subst. inversion H0.  constructor.
+  * inversion H. subst. inversion H0.
+  * inversion H.  subst. inversion H0. constructor.
+  * inversion H. unfold bind in H2. destruct (translate_aux c1).
+    ** destruct (translate_aux c2).
+      *** inversion H2. subst. inversion H0.
+        **** subst. constructor. eapply IHc1. eauto. auto.
+        **** subst. apply MPlusR. eapply IHc2. eauto. auto.
+      *** inversion H2.
+    ** inversion H2.
+  * inversion H. unfold bind in H2. destruct (translate_aux c1).
+    ** destruct (translate_aux c2).
+      *** inversion H2. subst. inversion H0. subst. constructor;eauto. 
+      *** inversion H2.
+    ** inversion H2.
+  * inversion H.
+Qed.
 
 
-Check pmatches_comp.
 Lemma plus_norm_sequential : forall (c : Contract), Sequential (plus_norm c).
 Proof. 
 intros. funelim (plus_norm c).
