@@ -23,6 +23,16 @@ match e1, e2 with
 | _, _ => false
 end.
 
+Lemma eqb_event_refl : forall (e : EventType), eqb_event e e = true.
+Proof.
+destruct e ; reflexivity.
+Qed.
+
+Lemma eqb_event_not_eq : forall (e0 e1 : EventType), e0 <> e1 -> eqb_event e0 e1 = false.
+Proof.
+destruct e0, e1;intros;try solve [contradiction | reflexivity]. 
+Qed.
+
 Definition eq_event_dec (e1 e2 : EventType) : {e1 = e2}+{~(e1=e2)}.
 Proof. destruct (eqb_event e1 e2) eqn:Heqn.
 - left. destruct e1 ; destruct e2; try reflexivity ; try discriminate Heqn.
@@ -58,7 +68,6 @@ match c0,c1 with
 | _, _ => false
 end.
 
-
 Lemma eqb_contract_true : forall (c0 c1 : Contract), eqb_contract c0 c1 = true -> c0 = c1.
 Proof.
 induction c0. 
@@ -91,14 +100,47 @@ induction c0.
     ** apply IHc0_2 in H1. intro H. inversion H. contradiction.  
 Defined.
 
-
-
 Definition eq_contract_dec : forall (c0 c1: Contract), {c0=c1} + {c0<>c1}.
 Proof.
 intros. destruct (eqb_contract c0 c1) eqn:Heqn.
 - left. apply eqb_contract_true. assumption.
 - right. apply eqb_contract_false. assumption.
 Defined.
+
+Lemma eq_eqb_contract_helper : forall (c : Contract), eqb_contract c c = true.
+Proof.
+induction c; try reflexivity.
+- apply eqb_event_refl.
+- simpl. rewrite IHc1. rewrite IHc2. reflexivity.
+- simpl. rewrite IHc1. rewrite IHc2. reflexivity.
+Qed.
+
+Lemma eq_eqb_contract : forall (c0 c1 : Contract), c0 = c1 -> eqb_contract c0 c1 = true.
+Proof.
+intros. rewrite H. apply eq_eqb_contract_helper. 
+Qed.
+
+Lemma eqb_contract_iff : forall (c0 c1: Contract), c0 = c1 <-> eqb_contract c0 c1 = true.
+Proof.
+split. apply eq_eqb_contract. apply eqb_contract_true. Qed.
+
+Lemma neq_eqb_contract : forall (c0 c1 : Contract), c0 <> c1 -> eqb_contract c0 c1 = false.
+Proof.
+intros. destruct (eqb_contract c0 c1) eqn:Heqn. 
+- rewrite <- eqb_contract_iff in Heqn. contradiction.
+- reflexivity.
+Qed.
+
+Lemma contract_reflect : forall (c0 c1 : Contract), reflect (c0 = c1) (eqb_contract c0 c1).
+Proof.
+intros. destruct (eq_contract_dec c0 c1).
+- rewrite eq_eqb_contract. constructor; assumption. auto.
+- rewrite neq_eqb_contract. constructor; assumption. auto.
+Qed.
+
+
+
+
  
 
 (*For a nullary contract c, nu c = true*)
@@ -430,6 +472,17 @@ Proof.
 induction s.
 - simpl. auto.
 - simpl. assert (HA: a::s = [a]++s). { reflexivity. } rewrite HA. constructor; auto.
+Qed.
+
+
+Lemma seq_fold_app : forall (s:Trace)(s0 s1 : list Contract), s ==~ seq_fold (s0 ++ s1) <-> s ==~ (seq_fold s0) _;_ (seq_fold s1).
+Proof.
+intros. generalize dependent s. generalize dependent s1.
+induction s0;intros.
+- simpl. split. intro. rewrite <- (app_nil_l s). constructor;auto. intros. inversion H. inversion H3. subst. simpl. assumption.
+- simpl. split.
+  * intros. inversion H. subst. rewrite seq_assoc. constructor. assumption. apply IHs0. assumption.
+  * intros. rewrite seq_assoc in H. inversion H. subst. constructor. assumption. apply IHs0. assumption.
 Qed.
 
 

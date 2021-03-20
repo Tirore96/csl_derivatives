@@ -44,7 +44,7 @@ HASNATDYNLINK     := $(COQMF_HASNATDYNLINK)
 OCAMLWARN         := $(COQMF_WARN)
 
 Makefile.conf: _CoqProject
-	coq_makefile -f _CoqProject theories/ContractEquations.v theories/Contract.v theories/NormalizedParallelContract.v theories/Order.v theories/ParallelContract.v -o Makefile
+	coq_makefile -f _CoqProject theories/ContractEquations.v theories/ContractSolver.v theories/Contract.v theories/Order.v theories/PSContract.v -o Makefile
 
 # This file can be created by the user to hook into double colon rules or
 # add any other Makefile code he may need
