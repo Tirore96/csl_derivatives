@@ -154,6 +154,54 @@ match c with
 end.
 
 
+
+Inductive Nu : Contract -> Prop :=
+| NSuccess : Nu Success
+| NPlusLeft c0 c1 (H0: Nu c0) : Nu (c0 _+_ c1)
+| NPlusRight c0 c1 (H0: Nu c1) : Nu (c0 _+_ c1)
+| NSeq c0 c1 (H0: Nu c0) (H1: Nu c1) : Nu (c0 _;_ c1).
+
+Hint Constructors Nu : core.
+
+Lemma nu_true : forall (c0 : Contract), nu c0 = true -> Nu c0.
+Proof.
+induction c0;intros;try solve [ constructor | discriminate].
+- simpl in H. apply orb_prop in H as [H | H];  auto.
+- simpl in H. apply andb_prop in H as [H1 H2];auto.
+Qed.
+
+
+Inductive NotNu : Contract -> Prop :=
+| NNFailure : NotNu Failure
+| NNEvent e : NotNu (Event e)
+| NNPLus c0 c1 (H0: NotNu c0) (H1: NotNu c1) : NotNu (c0 _+_ c1)
+| NNSeqFirst c0 c1 (H0: NotNu c0) : NotNu (c0 _;_ c1)
+| NNSeqSecond c0 c1 (H0: NotNu c1) : NotNu (c0 _;_ c1).
+
+
+
+Lemma nu_false : forall (c0 : Contract), nu c0 = false -> NotNu c0.
+Proof.
+induction c0;intros;try solve [ constructor | discriminate].
+- simpl in H. apply orb_false_iff in H as [H1 H2]. constructor; auto.
+- simpl in H. apply andb_false_iff in H as [H | H]. constructor;auto. apply NNSeqSecond. auto.
+Qed.
+
+
+Definition Nu_dec (c : Contract) : {Nu c}+{NotNu c}.
+Proof. destruct (nu c) eqn:Heqn.
+- left. auto using nu_true.
+- right. auto using nu_false.
+Defined.
+
+Lemma NotNu_negation : forall (c : Contract), NotNu c -> ~(Nu c).
+Proof.
+intros. induction H;intro H2; try solve [inversion H2 | inversion H2; contradiction]. 
+Qed.
+
+
+
+
 (*Derivative of contract with respect to an event*)
 Fixpoint derive(e:EventType)(c:Contract):Contract :=
 match c with
@@ -168,6 +216,39 @@ match c with
 end.
 
 Notation "c / e" := (derive e c).
+
+
+Inductive Derive : Contract -> EventType -> Contract -> Prop :=
+ | DSuccess e : Derive Success e Failure
+ | DFailure e : Derive Failure e Failure
+ | DEventS e : Derive (Event e) e Success
+ | DEventF e0 e (H0: e0 <> e) : Derive (Event e0) e Failure
+ | DPlus e c0 c0' c1 c1' (H0: Derive c0 e c0') (H1: Derive c1 e c1') : Derive (c0 _+_ c1) e (c0' _+_ c1')
+ | DSeqNu e c0 c0' c1 c1' (H0: Nu c0) (H1: Derive c0 e c0') (H2: Derive c1 e c1'): Derive (c0 _;_ c1) e ((c0' _;_c1) _+_ c1')
+ | DSeq e c0 c0' c1 (H0: NotNu c0) (H1 : Derive c0 e c0') : Derive (c0 _;_ c1) e (c0' _;_ c1) .
+
+Lemma Derive_derive : forall (c0 c1 : Contract)(e : EventType), Derive c0 e c1 <-> c0 / e = c1.
+Proof.
+split.
+- intros. induction H; try reflexivity. 
+  * simpl. destruct (eq_event_dec e e); try solve [ reflexivity | contradiction ].
+  * simpl. destruct (eq_event_dec e0 e); try solve [ reflexivity | contradiction ].
+  * simpl. subst. reflexivity.
+  * simpl. destruct (nu c0) eqn:Heqn; subst; try reflexivity. apply nu_false in Heqn.
+    apply NotNu_negation in Heqn. contradiction.
+  * simpl. destruct (nu c0) eqn:Heqn; subst; try reflexivity. apply nu_true in Heqn.
+    apply NotNu_negation in H0. contradiction.
+- generalize dependent e. generalize dependent c1. induction c0; intros.
+  * simpl in H. subst. constructor.
+  * simpl in H. subst. constructor.
+  * simpl in H. destruct (eq_event_dec e e0).
+    ** subst. constructor.
+    ** subst. constructor. assumption.
+  * simpl in H. subst. constructor; eauto.
+  * simpl in H. destruct (nu c0_1) eqn:Heqn.
+    ** apply nu_true in Heqn. subst. apply DSeqNu; eauto.
+    ** apply nu_false in Heqn. subst. apply DSeq;auto.
+Qed.
 
 Fixpoint matches (c:Contract)(s:Trace):bool :=
 match s with

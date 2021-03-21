@@ -588,11 +588,9 @@ Ltac csl_solve :=
   end.
 
 
-Lemma test2 : forall c0 c0' c1 c1', (c0 _+_ c1) _;_ (c0' _+_ c1') =R= c0 _;_ c0' _+_ c0 _;_ c1' _+_ c1 _;_ c0' _+_ c1 _;_ c1'. 
-Proof.
-intros.
- csl_solve.
-Qed.
+Lemma test2 : forall c0 c0' c1 c1', (c0 _+_ c1) _;_ (c0' _+_ c1') =R= 
+                     c0 _;_ c0' _+_ c0 _;_ c1' _+_ c1 _;_ c0' _+_ c1 _;_ c1'. 
+Proof. intros. csl_solve. Qed.
 
 
 
