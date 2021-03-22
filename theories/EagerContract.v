@@ -104,3 +104,31 @@ intros. induction H.
     ** exists c'. split. reflexivity. assumption.
     ** auto.
 Qed.
+
+(*Another representation of eager contract derivative is shown to be equivalent to the one above*)
+Inductive ETauDerive : Contract -> option EventType -> Contract -> Prop :=
+ | ETPlusL c c' : ETauDerive (c _+_ c') None c
+ | ETPlusR c c' : ETauDerive (c _+_ c') None c'
+ | ETSeqSuc c : ETauDerive (Success _;_ c) None c
+ | ETSuccess e : ETauDerive Success (Some e) Failure
+ | ETFailure e : ETauDerive Failure (Some e) Failure
+ | ETEventS e : ETauDerive (Event e) (Some e) Success
+ | ETEventF e0 e (H0: e0 <> e) : ETauDerive (Event e0) (Some e) Failure
+ | ETSeqStep o c c0 c1 (H0: ETauDerive c0 o c1): ETauDerive (c0 _;_ c) o (c1 _;_ c)
+ | ETTauStep e c0 c0' c1 (H0: ETauDerive c0 None c0') (H1: ETauDerive c0' (Some e) c1) : ETauDerive c0 (Some e) c1.
+Hint Constructors ETauDerive : core.
+
+Lemma Tau_EtauDerive : forall (c0 c1 : Contract), Tau c0 c1 <-> ETauDerive c0 None c1.
+Proof. intros. split;intros.
+- induction H;eauto.
+- generalize dependent c1. induction c0;intros; inversion H;subst;eauto.
+Qed.
+
+Lemma EDerive_EtauDerive : forall (c0 c1 : Contract)(e : EventType), EDerive c0 e c1 <-> ETauDerive c0 (Some e) c1.
+Proof. intros. split ; intros. 
+- induction H;eauto. rewrite Tau_EtauDerive in H0. eauto.
+- remember (Some e). induction H; try discriminate;eauto.
+  * inversion Heqo. constructor.
+  * inversion Heqo. subst. auto.
+  * inversion Heqo. subst. rewrite <- Tau_EtauDerive in H. eauto. 
+Qed.
