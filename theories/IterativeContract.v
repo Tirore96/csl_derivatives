@@ -560,6 +560,7 @@ CoInductive c_eq : Contract -> Contract -> Prop :=
   | c_trans c0 c1 c2 (H1 : c0 =R= c1) (H2 : c1 =R= c2) : c0 =R= c2
   | c_plus_morph c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _+_ c1 =R= c0' _+_ c1'
   | c_seq_morph c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _;_ c1 =R= c0' _;_ c1'
+  | c_test c0 c1 (H1: forall e : EventType, c0 / e =R= c1 / e) : c0 =R= c1
   where "c1 =R= c2" := (c_eq c1 c2).
 
 Hint Constructors c_eq : core.
@@ -582,11 +583,122 @@ Proof.
   intros. auto.
 Qed.
 
-Inductive CoTrace : Set :=
-| TNil : CoTrace
-| TElem : EventType -> CoTrace
-| TApp : CoTrace -> CoTrace -> CoTrace
-| TRepeat : list CoTrace -> CoTrace.
+CoInductive bisimilar2 : Contract -> Contract -> Prop :=
+| Bisimilar2 c0 c1 (H0: Nu c0 <-> Nu c1) (H1 : forall e, bisimilar2 (c0 / e) (c1 / e)) : bisimilar2 c0  c1.
+
+
+
+Lemma helper : forall c0 c1 e, (forall s : Trace, s ==~ c0 <-> s ==~ c1) -> 
+(forall s : Trace, s ==~ c0/e <-> s ==~ c1/e).
+Proof. 
+intros. specialize H with (e::s). repeat rewrite derive_spec_comp in H. assumption. 
+Qed.
+
+
+Check Bisimilar2.
+Lemma test2 : forall (c0 c1 : Contract),(forall s, s ==~ c0 <-> s ==~ c1) -> bisimilar2 c0 c1.
+Proof.
+cofix test2.
+intros. apply Bisimilar2.
+- specialize H with []. repeat rewrite <- Nu_empty in H. assumption.
+- intros. apply test2. apply helper. assumption.
+Qed.
+
+Lemma test3 : forall (c0 c1 : Contract)(e : EventType), c0 =R= c1 -> Event e _;_ c0 =R= Event e _;_ c1.
+Proof. intros. auto. Qed.
+
+Lemma test4 : forall (c c': Contract)(e : EventType), NotNu c -> Derive c e c' -> c =R= Event e _;_ c'.
+Proof. Admitted.
+
+Definition alphabet := [Notify;Transfer].
+Definition expand (c : Contract) := plus_fold (map (fun e => Event e _;_ c / e) alphabet).
+
+Lemma c_eq_expand : forall (c : Contract), c =R= expand c.
+Proof. Admitted.
+
+Lemma c_eq_reduce_expand : forall (c0 c1 : Contract), (forall e, c0/e =R= c1/e) -> c0 =R= c1.
+Proof. cofix c_eq_reduce_expand. Admitted.
+
+Lemma bisimilar_c_eq : forall (c0 c1 : Contract), bisimilar2 c0 c1 -> c0 =R= c1.
+Proof.
+cofix bisimilar_c_eq.
+intros. inversion H. subst.
+apply c_test.
+intros. apply bisimilar_c_eq. eauto. Qed.
+
+
+
+
+
+
+
+Lemma c_eq_derive : forall (c0 c1 : Contract)(e : EventType), c0 =R= c1 -> c0 / e =R= c1 / e.
+Proof.
+cofix c_eq_derive.
+intros.
+induction H.
+- simpl. auto.
+- simpl. auto.
+- simpl. auto.
+- simpl. auto.
+- simpl. destruct (Nu_dec (c2 _;_ c3)).
+  * destruct (Nu_dec c2); inversion n; subst.
+    ** destruct (Nu_dec c3).
+      *** rewrite c_distr_r. rewrite c_seq_assoc. rewrite c_plus_assoc. reflexivity. 
+      *** nnn n1.
+    ** nnn n0.
+  * inversion n;subst.
+    ** destruct (Nu_dec c2).
+      *** destruct (Nu_dec c3).
+        **** nnn H3.
+        **** nnn H3.
+      *** auto.
+    ** destruct (Nu_dec c2).
+      *** destruct (Nu_dec c3).
+        **** nnn H3.
+        **** rewrite c_distr_r. rewrite c_seq_assoc. auto.
+      *** auto.
+- simpl. rewrite c_seq_failure_l. eauto.
+- simpl. destruct (Nu_dec c1);eauto.
+- simpl. auto.
+- simpl. destruct (Nu_dec c);eauto.
+- simpl. destruct (Nu_dec c2).
+  * rewrite c_distr_l. repeat rewrite <- c_plus_assoc. eauto.
+  * eauto.
+- simpl. destruct (Nu_dec (c2 _+_ c3)).
+  * destruct (Nu_dec c2).
+    ** destruct (Nu_dec c3).
+      *** rewrite c_distr_r. rewrite c_plus_assoc. rewrite (c_plus_comm _ (c4 / e)).
+          rewrite <- c_plus_assoc. rewrite <- c_plus_assoc. eauto.
+      *** rewrite c_distr_r. rewrite c_plus_assoc. rewrite (c_plus_comm _ (c4 / e)).
+          rewrite <- c_plus_assoc. auto.
+    ** destruct (Nu_dec c3).
+      *** rewrite c_distr_r. rewrite c_plus_assoc. auto.
+      *** inversion n. nnn n0. nnn n1.
+  * inversion n. subst. destruct (Nu_dec c2).
+    ** nnn H4.
+    ** destruct (Nu_dec c3).
+      *** nnn H5.
+      *** rewrite c_distr_r. auto.
+- subst. reflexivity.
+- subst. 
+
+
+
+ rewrite c_plus_assoc. rewrite (c_plus_comm (c3 / e _;_ c4)).
+          rewrite <- (c_plus_assoc (c4 / e)). rewrite c_plus_idemp.
+          rewrite (c_plus_comm (c4 / e)). rewrite <- c_plus_assoc. rewrite c_plus_assoc.
+          rewrite (c_plus_comm (c4 / e ) (c4 / e _+_ c3 / e _;_ c4)). eauto.
+ rewrite (c_plus_comm _ (c4 / e)).
+          rewrite <- c_plus_assoc. rewrite <- c_plus_assoc. eauto.
+  * eauto.
+  * eauto.
+
+Inductive RTrace : Set :=
+| RNil : RTrace
+| RElem : EventType -> RTrace
+| RApp : RTrace -> RTrace -> RTrace
+| RRepeat : list Trace -> RTrace.
 
 Fixpoint stuck_dup (c : Contract) :=
 match c with
@@ -596,23 +708,58 @@ match c with
 | _ => false
 end.
 
+CoInductive Stream : Set :=
+ | SNil : Stream
+ | SCons : EventType -> Stream -> Stream.
 
-Fixpoint monoms (c : Contract) : list CoTrace :=
-match c with
-| Success => [TNil]
-| Failure => []
-| Event e => [TElem e]
-| c0 _+_ c1 => (monoms c0) ++ (monoms c1)
-| c0 _;_ c1 => map (fun (xy: CoTrace*CoTrace) => let (x,y):=xy in TApp x y) (list_prod (monoms c0) (monoms c1)) 
-| Star c => if nu c || stuck_dup c then [TNil] else [TRepeat (monoms c)]
+CoFixpoint stream_app s1 s2 :=
+match s1 with
+| SNil => s2
+| SCons e s1'=> SCons e (stream_app s1' s2)
 end.
 
-Fixpoint contract_of_CoTrace s :=
+Fixpoint stream_of_trace (s : Trace) : Stream :=
 match s with
-| TNil => Failure
-| TElem e => Event e
-| TApp s0 s1 => (contract_of_CoTrace s0) _;_ (contract_of_CoTrace s1)
-| TRepeat l => Star (plus_fold (map contract_of_CoTrace l))
+| [] => SNil
+| e::s' => SCons e (stream_of_trace s')
+end.
+
+CoFixpoint stream_repeat (s_iter s_orig : Trace) :=
+match s_iter with
+| [] => SNil
+| e :: [] => SCons e (stream_repeat s_orig)
+| e :: s' => SCons e (
+| _ :: _ => (stream_of_trace (removelast s)) (SCons (last s Transfer) (stream_repeat s))
+end.
+stream_of_trace s  
+
+
+Fixpoint monoms (c : Contract) : list RTrace :=
+match c with
+| Success => [RNil]
+| Failure => []
+| Event e => [RElem e]
+| c0 _+_ c1 => (monoms c0) ++ (monoms c1)
+| c0 _;_ c1 => map (fun (xy: RTrace*RTrace) => let (x,y):=xy in RApp x y) (list_prod (monoms c0) (monoms c1)) 
+| Star c => if nu c || stuck_dup c then [RNil] else [RRepeat (monoms_l c)]
+end
+with 
+monoms_l (c : Contract) : list Trace :=
+match c with
+| Success => [[]]
+| Failure => []
+| Event e => [e]
+| c0 _+_ c1 => (monoms_l c0) ++ (monoms_l c1)
+| c0 _;_ c1 => map ++ (list_prod (monoms_l c0) (monoms_l c1)) 
+| Star c => monoms_l c
+end.
+
+Fixpoint contract_of_RTrace s :=
+match s with
+| RNil => Failure
+| RElem e => Event e
+| RApp s0 s1 => (contract_of_RTrace s0) _;_ (contract_of_RTrace s1)
+| RRepeat l => Star (plus_fold (map contract_of_RTrace l))
 end.
 
 
@@ -637,7 +784,6 @@ Section bisimilar.
     * rewrite derive_spec_comp in H0. rewrite derive_spec_comp. eapply IHs. eauto. assumption.
   Qed.
 
-  Lemma bisimilar_norm : forall c1 c2, R c1 c2 -> 
 
   Lemma bisimilar_c_eq : forall c1 c2, R c1 c2 -> c1 =R= c2. 
   cofix bisimilar_c_eq. assumption.
