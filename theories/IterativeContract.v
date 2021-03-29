@@ -619,12 +619,49 @@ Proof. Admitted.
 Lemma c_eq_reduce_expand : forall (c0 c1 : Contract), (forall e, c0/e =R= c1/e) -> c0 =R= c1.
 Proof. cofix c_eq_reduce_expand. Admitted.
 
-Lemma bisimilar_c_eq : forall (c0 c1 : Contract), bisimilar2 c0 c1 -> c0 =R= c1.
+
+
+
+Section bisimilar.
+  Variable R : Contract -> Contract -> Prop.
+  Hypothesis Bi_Nu : forall c1 c2, R c1 c2 -> nu c1 = nu c2.
+  Hypothesis Bi_Derive : forall c1 c2 e, R c1 c2 -> R (c1 / e) (c2 / e).
+
+  Lemma bisimilar_eq : forall c1 c2, R c1 c2 -> (forall (s : Trace), s ==~ c1 <-> s ==~ c2).
+  Proof.
+  split;intros.
+  - generalize dependent c2. generalize dependent c1. induction s;intros.
+    * apply Bi_Nu in H. destruct (nu c1) eqn:Heqn.
+      ** symmetry in H. apply nu_true in H. apply Nu_empty in H. assumption.
+      ** rewrite <- Nu_empty in H0. apply nu_false in Heqn. nnn Heqn.
+    * rewrite derive_spec_comp in H0. rewrite derive_spec_comp. eapply IHs. eassumption. auto.
+  - generalize dependent c2. generalize dependent c1. induction s;intros.
+    * apply Bi_Nu in H. destruct (nu c1) eqn:Heqn.
+      ** symmetry in H. apply nu_true in Heqn. apply Nu_empty in Heqn. assumption.
+      ** rewrite <- Nu_empty in H0. symmetry in H. apply nu_false in H. nnn H.
+    * rewrite derive_spec_comp in H0. rewrite derive_spec_comp. eapply IHs. eauto. assumption.
+  Qed.
+
+
+  Lemma bisimilar_c_eq : forall c1 c2, R c1 c2 -> c1 =R= c2.
+  Proof.
+  cofix bisimilar_c_eq.
+  intros. apply c_test. intros. apply Bi_Derive with (e:=e) in H.  apply bisimilar_c_eq. assumption.
+  Qed.
+End bisimilar.
+
+
+
+
+Lemma bisimilar_c_eq2 : forall (c0 c1 : Contract), bisimilar2 c0 c1 -> c0 =R= c1.
 Proof.
 cofix bisimilar_c_eq.
 intros. inversion H. subst.
 apply c_test.
 intros. apply bisimilar_c_eq. eauto. Qed.
+
+Lemma bisimilar_c_eq : forall (c0 c1 : Contract), bisimilar c0 c1 -> c0 =R= c1.
+Proof.
 
 
 
@@ -763,31 +800,6 @@ match s with
 end.
 
 
-
-Section bisimilar.
-  Variable R : Contract -> Contract -> Prop.
-  Hypothesis Bi_Nu : forall c1 c2, R c1 c2 -> nu c1 = nu c2.
-  Hypothesis Bi_Derive : forall c1 c2 e, R c1 c2 -> R (c1 / e) (c2 / e).
-
-  Lemma bisimilar_eq : forall c1 c2, R c1 c2 -> (forall (s : Trace), s ==~ c1 <-> s ==~ c2).
-  Proof.
-  split;intros.
-  - generalize dependent c2. generalize dependent c1. induction s;intros.
-    * apply Bi_Nu in H. destruct (nu c1) eqn:Heqn.
-      ** symmetry in H. apply nu_true in H. apply Nu_empty in H. assumption.
-      ** rewrite <- Nu_empty in H0. apply nu_false in Heqn. nnn Heqn.
-    * rewrite derive_spec_comp in H0. rewrite derive_spec_comp. eapply IHs. eassumption. auto.
-  - generalize dependent c2. generalize dependent c1. induction s;intros.
-    * apply Bi_Nu in H. destruct (nu c1) eqn:Heqn.
-      ** symmetry in H. apply nu_true in Heqn. apply Nu_empty in Heqn. assumption.
-      ** rewrite <- Nu_empty in H0. symmetry in H. apply nu_false in H. nnn H.
-    * rewrite derive_spec_comp in H0. rewrite derive_spec_comp. eapply IHs. eauto. assumption.
-  Qed.
-
-
-  Lemma bisimilar_c_eq : forall c1 c2, R c1 c2 -> c1 =R= c2. 
-  cofix bisimilar_c_eq. assumption.
-End bisimilar.
 
 
 
