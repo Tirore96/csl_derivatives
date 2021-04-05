@@ -5,7 +5,7 @@ Require Import Bool.Bool.
 Require Import Lists.List.
 Import ListNotations.
 (*******************************************************************************************************)
-
+Set Implicit Arguments.
 
 Definition contract_relation := Contract -> Contract -> Prop.
 
@@ -120,56 +120,67 @@ split.
 Qed.
 
 
+Reserved Notation "c0 =ACI= c1" (at level 63).
+Inductive c_eq_aci : Contract -> Contract -> Prop :=
+    | cc_plus_assoc c0 c1 c2 : (c0 _+_ c1) _+_ c2 =ACI= c0 _+_ (c1 _+_ c2) (*ACI axioms*)
+    | cc_plus_comm c0 c1: c0 _+_ c1 =ACI= c1 _+_ c0
+    | cc_plus_idemp c : c _+_ c =ACI= c 
+    | cc_trans c0 c1 c2 (H1 : c0 =ACI= c1) (H2 : c1 =ACI= c2) : c0 =ACI= c2 (*transitivity*)
+    | cc_ctx_plus c0 c0' c1 c1' (H1 : c0 =ACI= c0') (H2 : c1 =ACI= c1') : c0 _+_ c1 =ACI= c0' _+_ c1' (*ctx rules*)
+    | cc_ctx_seq c0 c0' c1 c1' (H1 : c0 =ACI= c0') (H2 : c1 =ACI= c1') : c0 _;_ c1 =ACI= c0' _;_ c1'
+    where "c0 =ACI= c1" := (c_eq_aci c0 c1).
+Hint Constructors c_eq_aci : core.
 
+Lemma c_eq_aci_nu : forall c0 c1, c0 =ACI= c1 -> nu c0 = nu c1.
+Proof.
+intros. induction H;simpl; try btauto.
+- rewrite IHc_eq_aci1. auto.
+- rewrite IHc_eq_aci1. now rewrite IHc_eq_aci2. 
+- rewrite IHc_eq_aci1. now rewrite IHc_eq_aci2.
+Qed. 
 
+Ltac nu_destruct :=
+  repeat match goal with
+         | [ |- context[if nu ?c then _ else _] ] => destruct (nu c) eqn:?Heqn
+         end.
+
+Lemma c_eq_aci_derive : forall c0 c1, c0 =ACI= c1 -> (forall e, c0/e =ACI= c1/e).
+Proof.
+intros. induction H; try solve [simpl ; eauto].
+simpl. nu_destruct;auto.
+all: apply c_eq_aci_nu in H; rewrite Heqn in H; rewrite Heqn0 in H; discriminate.
+Qed.
 
 Reserved Notation "c0 =R= c1" (at level 63).
-
 CoInductive c_eq : Contract -> Contract -> Prop :=
-  | c_plus_assoc c0 c1 c2 : (c0 _+_ c1) _+_ c2 =R= c0 _+_ (c1 _+_ c2)
-  | c_plus_comm c0 c1: c0 _+_ c1 =R= c1 _+_ c0
-  | c_plus_neut c: c _+_ Failure =R= c
-  | c_plus_idemp c : c _+_ c =R= c 
-  | c_seq_assoc c0 c1 c2 : (c0 _;_ c1) _;_ c2 =R= c0 _;_ (c1 _;_ c2)
-  | c_seq_neut_l c : (Success _;_ c) =R= c 
-  | c_seq_neut_r c : c _;_ Success =R= c 
-  | c_seq_failure_l c : Failure _;_ c =R= Failure    (*EXTRA AXIOM*)
-  | c_seq_failure_r c :  c _;_ Failure =R= Failure 
-  | c_distr_l c0 c1 c2 : c0 _;_ (c1 _+_ c2) =R= (c0 _;_ c1) _+_ (c0 _;_ c2)
-  | c_distr_r c0 c1 c2 : (c0 _+_ c1) _;_ c2 =R= (c0 _;_ c2) _+_ (c1 _;_ c2)
-  | c_refl c : c =R= c
-  | c_sym c0 c1 (H: c0 =R= c1) : c1 =R= c0
-  | c_trans c0 c1 c2 (H1 : c0 =R= c1) (H2 : c1 =R= c2) : c0 =R= c2
-  | c_plus_morph c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _+_ c1 =R= c0' _+_ c1'
-  | c_seq_morph c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _;_ c1 =R= c0' _;_ c1'
-  | c_fold_unfold c : Star c =R= Success _+_ (c _;_ Star c)
-  where "c1 =R= c2" := (c_eq c1 c2).
+  | c_aci c0 c1 (H: c0 =ACI= c1) : c0 =R= c1
+  | c_fix c0 c1 (H0: forall e, c0/e =R= c1/e) (H1 : nu c0 = nu c1) : c0 =R= c1
+    where "c0 =R= c1" := (c_eq c0 c1).
 
-Hint Constructors c_eq : core.
-
-Add Parametric Relation : Contract c_eq
-  reflexivity proved by c_refl
-  symmetry proved by c_sym
-  transitivity proved by c_trans
-  as Contract_setoid.
-
-Add Parametric Morphism : CPlus with
-signature c_eq ==> c_eq ==> c_eq as c_eq_plus_morphism.
+Lemma c_eq_nu : forall c0 c1, c0 =R= c1 -> nu c0 = nu c1.
 Proof.
-  intros. auto.
+intros. inversion H;auto using c_eq_aci_nu.
 Qed.
 
-Add Parametric Morphism : CSeq with
-signature c_eq ==> c_eq ==> c_eq as c_eq_seq_morphism.
+Lemma c_eq_derive : forall c0 c1, c0 =R= c1 -> (forall e, c0/e =R= c1/e).
 Proof.
-  intros. auto.
+cofix H.
+intros. inversion H0. 
+- constructor. auto using c_eq_aci_derive. 
+- apply H1.
 Qed.
 
+(*Co-recursive call only needed for showing -> *)
 Lemma c_eq_is_bisimilarity : bisimilarity c_eq.
-Proof. Admitted.
+Proof. 
+split; generalize dependent c1; generalize dependent c0.
+- cofix c_eq_is_bisimilarity. intros.
+  constructor; auto using c_eq_nu, c_eq_derive.
+- cofix H. intros. destruct H0. apply c_fix.
+  * intros. auto.
+  * auto.
+Qed.
 
-
-Ltac rewrite_to_Bisimilarity H0 H1 := pose proof H0; unfold bisimilarity in H0;rewrite H0 in H1;clear H0.
 
 Theorem c_eq_soundness : forall c0 c1, c0 =R= c1 -> c0 ==~== c1.
 Proof.
@@ -182,16 +193,4 @@ Theorem c_eq_completeness : forall c0 c1, c0 ==~== c1 -> c0 =R= c1.
 Proof.
 intros. pose proof c_eq_is_bisimilarity. pose proof matches_eq_is_bisimilarity.
 unfold bisimilarity in *. rewrite H0. now rewrite <- H1.
-Qed.
-
-
-(*Possibly useful lemmas to rewrite without using the rewrite tactic*)
-Lemma rewrite_left : forall c0 c1 c2,c1 =R= c0 -> c0 =R= c2-> c1 =R= c2.
-Proof.
-intros. eauto.
-Qed.
-
-Lemma rewrite_right : forall c0 c1 c2, c2 =R= c0 -> c1 =R= c0-> c1 =R= c2.
-Proof.
-intros. eauto.
 Qed.

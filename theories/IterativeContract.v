@@ -10,7 +10,7 @@ Require Import Setoid.
 Require Import Init.Tauto btauto.Btauto.
 Require Import Logic.ClassicalFacts.
 
-Set Implicit Arguments.
+(* Set Implicit Arguments. *)
 
 
 
