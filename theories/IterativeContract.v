@@ -165,18 +165,7 @@ match c with
 | c0 _+_ c1 => nu c0 || nu c1
 | Star c => true
 end.
-
-
-
-Inductive Nu : Contract -> Prop :=
-| NSuccess : Nu Success
-| NPlusLeft c0 c1 (H0: Nu c0) : Nu (c0 _+_ c1)
-| NPlusRight c0 c1 (H0: Nu c1) : Nu (c0 _+_ c1)
-| NSeq c0 c1 (H0: Nu c0) (H1: Nu c1) : Nu (c0 _;_ c1)
-| NStar c : Nu (Star c).
-
-Hint Constructors Nu : core.
-
+(*
 Lemma nu_true : forall (c0 : Contract), nu c0 = true -> Nu c0.
 Proof.
 induction c0;intros;try solve [ constructor | discriminate].
@@ -213,7 +202,7 @@ Lemma NotNu_negation : forall (c : Contract), NotNu c -> ~(Nu c).
 Proof.
 intros. induction H;intro H2; try solve [inversion H2 | inversion H2; contradiction]. 
 Qed.
-
+*)
 
 
 
@@ -222,7 +211,7 @@ Equations derive(e:EventType)(c:Contract):Contract :=
 derive e Success := Failure;
 derive e Failure := Failure;
 derive e (Event e1) := if eq_event_dec e1 e then Success else Failure;
-derive e (c0 _;_ c1) := if (Nu_dec c0) then ((derive e c0) _;_ c1) _+_ (derive e c1)
+derive e (c0 _;_ c1) := if nu c0 then ((derive e c0) _;_ c1) _+_ (derive e c1)
                           else (derive e c0) _;_ c1;
 derive e (c0 _+_ c1) := (derive e c0) _+_ (derive e c1);
 derive e (Star c) := derive e c _;_ (Star c).
@@ -230,7 +219,7 @@ Global Transparent derive.
 
 Notation "c / e" := (derive e c).
 
-
+(*
 Inductive Derive : Contract -> EventType -> Contract -> Prop :=
  | DSuccess e : Derive Success e Failure
  | DFailure e : Derive Failure e Failure
@@ -262,7 +251,7 @@ Qed.
 Lemma Derive_derive2 : forall (c : Contract)(e : EventType), Derive c e (c / e).
 Proof.
 intros. rewrite Derive_derive. reflexivity. Qed.
-
+*)
 
 Equations matches (c:Contract)(s:Trace):bool :=
 matches c [] := nu c;
@@ -272,22 +261,21 @@ Global Transparent matches.
 (*Expression*)
 Notation "s =~ c" := (matches c s) (at level 63).
 
-Inductive bi_matches : Trace -> Contract -> Prop :=
- | BNu c (H : Nu c) : bi_matches [] c
- | BDerive c e s  (H2 : bi_matches s (c / e)) : bi_matches (e::s) c.
-Hint Constructors bi_matches : core.
+Inductive Matches : Trace -> Contract -> Prop :=
+ | BNu c (H : nu c = true) : Matches [] c
+ | BDerive c e s  (H2 : Matches s (c / e)) : Matches (e::s) c.
+Hint Constructors Matches : core.
 
 
 
 
 
-Lemma bi_matches_reflect : forall (s : Trace)(c : Contract), reflect (bi_matches s c) (s =~ c).
+Lemma Matches_reflect : forall (s : Trace)(c : Contract), reflect (Matches s c) (s =~ c).
 Proof.
 intros. funelim (s =~ c).
 - simpl. destruct (nu c) eqn:Heqn.
-  * constructor. constructor. apply nu_true. assumption.
-  * constructor. intro H. inversion H. apply nu_false in Heqn. apply NotNu_negation in Heqn.
-    contradiction.
+  * constructor. auto. 
+  * constructor. intro H. inversion H. rewrite Heqn in H0. discriminate.
 - simpl. destruct (l =~ c / e) eqn:Heqn.
   * constructor. inversion H. auto.
   * constructor. intro H2. inversion H2. subst. inversion H. contradiction.
@@ -299,8 +287,8 @@ Theorem derive_spec : forall (e:EventType)(s:Trace)(c:Contract),
 Proof. intros e s c. simpl. reflexivity.
 Qed.
 
-Lemma derive_spec_bi: forall (e : EventType)(s : Trace)(c : Contract),
- bi_matches (e::s) c <-> bi_matches s (c / e).
+Lemma derive_spec2: forall (e : EventType)(s : Trace)(c : Contract),
+ Matches (e::s) c <-> Matches s (c / e).
 Proof. split;intros; (try inversion H) ; auto. Qed.
 
 Reserved Notation "s ==~ re" (at level 63).
@@ -327,94 +315,107 @@ Inductive matches_comp : Trace -> Contract -> Prop :=
 
 Hint Constructors matches_comp : core.
 
-Lemma bi_matches_plus_l : forall (s : Trace)(c1 c2 : Contract), bi_matches s c1 -> bi_matches s (c1 _+_ c2).
-Proof.
-intros. generalize dependent c2. induction H;auto;intros.
-rewrite derive_spec_bi. simpl. auto.
-Qed.
+Lemma simpl_Matches_nil_plus : forall c0 c1, nu c0 || nu c1 = true -> Matches [] (c0 _+_ c1).
+Proof. intros; constructor ; simpl ; intuition. Qed.
 
-Lemma bi_matches_plus_r : forall (s : Trace)(c1 c2 : Contract), bi_matches s c2 -> bi_matches s (c1 _+_ c2).
-Proof.
-intros. generalize dependent c1. induction H;auto;intros.
-rewrite derive_spec_bi. simpl. auto.
-Qed.
+Lemma simpl_Matches_nil_seq : forall c0 c1, nu c0 && nu c1 = true -> Matches [] (c0 _;_ c1).
+Proof. intros; constructor ; simpl ; intuition. Qed.
 
-Ltac nnn NN := apply NotNu_negation in NN ; contradiction. 
 
-Lemma bi_matches_seq : forall (s1 s2 : Trace)(c1 c2 : Contract), 
-bi_matches s1 c1 -> bi_matches s2 c2 -> bi_matches (s1 ++ s2) (c1 _;_ c2).
-Proof.
-intros. induction H.
-- simpl. destruct H0.
-  * auto.
-  * constructor. simpl. destruct (Nu_dec c).
-    ** apply bi_matches_plus_r. assumption.
-    ** nnn n.
-- simpl. rewrite derive_spec_bi. simpl. destruct (Nu_dec c).
-  * apply bi_matches_plus_l. assumption.
-  * assumption.
-Qed.
 
-Lemma bi_matches_star : forall (s1 s2 : Trace)(c : Contract), 
-bi_matches s1 c -> bi_matches s2 (Star c) -> bi_matches (s1 ++ s2) (Star c).
-Proof.
-intros. inversion H.
-- simpl. assumption.
-- simpl. rewrite derive_spec_bi. simpl. apply bi_matches_seq;auto.
+Hint Extern 1 =>
+  match goal with
+    | [ |- context[Matches [] (?c0 _+_ ?c1)]  ] => intros;  apply simpl_Matches_nil_plus ; intuition
+    | [ |- context[Matches [] (?c0 _;_ ?c1)]  ] => intros;  apply simpl_Matches_nil_seq ; intuition
+  end : Mbase. 
+
+Lemma Matches_plus_l : forall (s : Trace)(c1 c2 : Contract), Matches s c1 -> Matches s (c1 _+_ c2).
+Proof. intros. generalize dependent c2. induction H;eauto with Mbase.
 Qed.
 
 
 
+Lemma Matches_plus_r : forall (s : Trace)(c1 c2 : Contract), Matches s c2 -> Matches s (c1 _+_ c2).
+Proof.
+Proof. intros. generalize dependent c1. induction H;eauto with Mbase.
+Qed.
+
+Lemma Matches_seq : forall (s1 s2 : Trace)(c1 c2 : Contract), 
+Matches s1 c1 -> Matches s2 c2 -> Matches (s1 ++ s2) (c1 _;_ c2).
+Proof.
+intros. induction H;simpl.
+- destruct H0;  auto with Mbase.
+  constructor. simpl. destruct (nu c) eqn:Heqn; try discriminate.
+  auto using Matches_plus_r.
+- rewrite derive_spec2. simpl. destruct (nu c) eqn:heqn ; auto.
+  auto using Matches_plus_l.
+Qed.
+
+Lemma Matches_star : forall (s1 s2 : Trace)(c : Contract), 
+Matches s1 c -> Matches s2 (Star c) -> Matches (s1 ++ s2) (Star c).
+Proof.
+intros. inversion H; auto.
+simpl; rewrite derive_spec2; simpl; auto using Matches_seq.
+Qed.
+
+Lemma nu_empty : forall (c : Contract), nu c = true <-> [] ==~ c.
+Proof.
+split;intros.
+- induction c; simpl in H ; try discriminate; auto. apply orb_prop in H. destruct H;auto.
+  rewrite <- (app_nil_l []); auto.
+- induction c;auto; inversion H; simpl; intuition. 
+  apply app_eq_nil in H1 as [H1 H1']. subst. intuition. 
+Qed.
+
+
+(*
 Lemma Nu_empty : forall (c : Contract), Nu c <-> [] ==~ c.
 Proof.
 split;intros.
 - induction H;auto. rewrite <- (app_nil_l []). auto.
 - induction c;auto; inversion H;auto. apply app_eq_nil in H1 as [H1 H1']. subst. auto.
-Qed.
+Qed.*)
 
 
-Lemma derives_matches : forall (e : EventType)(s : Trace)(c : Contract), s ==~ c / e -> (e::s) ==~ c.
+Lemma derives_matches : forall (c : Contract)(e : EventType)(s : Trace), s ==~ c / e -> (e::s) ==~ c.
 Proof.
-intros. generalize dependent e. generalize dependent s. induction c;intros;simpl in H.
-- inversion H.
-- inversion H.
-- destruct (eq_event_dec e e0).
-  * inversion H. subst. auto.
+induction c;intros;simpl in H; try solve [inversion H].
+- destruct (eq_event_dec e e0); inversion H. subst ; auto.
+- destruct (nu c1) eqn:Heqn;inversion H;auto.
+- destruct (nu c1) eqn:Heqn.
   * inversion H.
-- inversion H;auto.
-- destruct (Nu_dec c1).
-  * inversion H.
-    ** inversion H2. subst. rewrite app_comm_cons. auto. 
-    ** subst. rewrite <- (app_nil_l (e::s)). constructor. apply Nu_empty;auto. auto.
-  * inversion H. subst. rewrite app_comm_cons. auto.
-- inversion H. subst. rewrite app_comm_cons. auto.
+    ** inversion H2. rewrite app_comm_cons. auto.
+    ** rewrite <- (app_nil_l (e::s)). constructor; auto using nu_empty.
+       rewrite <- nu_empty. assumption.
+  * inversion H. rewrite app_comm_cons. auto.
+- inversion H. rewrite app_comm_cons. auto.
 Qed.
 
 
 
-Lemma matches_bi_matches : forall (s : Trace)(c : Contract), s ==~ c <-> bi_matches s c.
+Lemma matches_Matches : forall (s : Trace)(c : Contract), s ==~ c <-> Matches s c.
 Proof.
 split ; intros.
 - induction H;auto.
   * constructor. simpl. destruct (eq_event_dec x x). auto. contradiction.
-  * apply bi_matches_seq;auto.
-  * apply bi_matches_plus_l;auto.
-  * apply bi_matches_plus_r;auto.
-  * apply bi_matches_star;auto.
+  * apply Matches_seq;auto.
+  * apply Matches_plus_l;auto.
+  * apply Matches_plus_r;auto.
+  * apply Matches_star;auto.
 - induction H.
-  * apply Nu_empty;auto.
+  * apply nu_empty;auto.
   * apply derives_matches. assumption. 
 Qed.
 
 (*the proposition s ==~ c is reflected in the value s =~ c *)
 Lemma matches_reflect : forall (s : Trace) (c : Contract), reflect (s ==~ c) (s =~ c).
 Proof.
-intros. destruct (bi_matches_reflect s c).
-- constructor. apply matches_bi_matches. assumption.
-- constructor. intro H. rewrite <- matches_bi_matches in n. contradiction.
+intros. destruct (Matches_reflect s c).
+- constructor. apply matches_Matches. assumption.
+- constructor. intro H. rewrite <- matches_Matches in n. contradiction.
 Qed.
 
-Lemma matches_comp_matches : forall (s : Trace)(c : Contract), s ==~ c <-> s =~ c = true.
+Lemma matches_comp_iff_matches : forall (s : Trace)(c : Contract), s ==~ c <-> s =~ c = true.
 Proof.
 intros. destruct (matches_reflect s c).
 - split ; auto.
@@ -425,7 +426,7 @@ Qed.
 
 Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s ==~ c <-> s ==~ c / e.
 Proof.
-intros. repeat rewrite matches_comp_matches. simpl. reflexivity.
+intros. repeat rewrite matches_comp_iff_matches. simpl. reflexivity.
 Qed.
 
 
@@ -539,8 +540,4 @@ induction s0;intros.
   * intros. rewrite seq_assoc in H. inversion H. subst. constructor. assumption. apply IHs0. assumption.
 Qed.
 
-Theorem new_theorem : .
-Proof.
-
-Qed.
 
