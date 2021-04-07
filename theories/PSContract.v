@@ -603,7 +603,6 @@ Inductive Sequential : Contract -> Type :=
  | SeqPlus c0 c1 (H0: Sequential c0) (H1 : Sequential c1) : Sequential (c0 _+_ c1)
  | SeqSeq c0 c1 (H0: Sequential c0) (H1 : Sequential c1) : Sequential (c0 _;_ c1).
 
- 
 Definition bind {A B : Type} (a : option A) (f : A -> option B) : option B :=
   match a with
     | Some x => f x
