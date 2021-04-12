@@ -308,29 +308,7 @@ intros. destruct (inclb l0 l1) eqn:Heqn.
 - constructor. intro H. rewrite <- inclb_iff in H. rewrite Heqn in H. discriminate.
 Qed.
 
-(*
-Fixpoint flatten_contract (c : Contract) : list Contract :=
-match c with
-| c0 _+_ c1 => (flatten_contract c0) ++ (flatten_contract c1)
-| _ => [c]
-end.
 
-Definition aci_eq (c0 c1 : Contract) : bool :=
- let c0_l := flatten_contract c0 in
- let c1_l := flatten_contract c1 in
- (inclb c0_l c1_l) && (inclb c1_l c0_l) .
-
-Definition aci_p_eq (p0 p1: (Contract * Contract)) : bool :=
- let (c0,c0') := p0 in
- let (c1,c1') := p1 in
- aci_eq c0 c1 && aci_eq c0' c1'.*)
-
-(*
-Fixpoint trace_derive (c: Contract) (s : Trace) :=
-match s with
-| [] => c
-| e::s' => trace_derive (c/e) s'
-end.*)
 
 Equations trace_derive (c : Contract) (s : Trace) : Contract :=
 trace_derive c [] := c;
@@ -345,84 +323,10 @@ Inductive Trace_Derive : Contract -> Trace -> Contract -> Prop :=
 | Trace_Derive_Cons c s c' e (H: Trace_Derive (c/e) s c') : Trace_Derive c (e::s) c'. (*rule motivated by constructor being analgous to cons on lists*)
 Hint Constructors Trace_Derive : core.
 
-(*
-Inductive Trace_Derive : Contract -> Trace -> Contract -> Prop :=
-| Trace_Derive_Nil c : Trace_Derive c [] c
-| Trace_Derive_Cons c s c' e (H: Trace_Derive c s c') : Trace_Derive c (s++[e]) (c'/e).
-Hint Constructors Trace_Derive : core.*)
-
-
-
 Lemma derive_trace_derive : forall (c : Contract)(s : Trace)(e :EventType), trace_derive c (s++[e]) = (trace_derive c s) / e.
 Proof.
 intros. generalize dependent c. induction s;simpl;auto.
 Qed.
-
-Lemma length_removelast : forall (A: Type)(e:A)(l:list A), length (removelast (e :: l)) = length l.
-Proof.
-intros. simpl. generalize dependent e. induction l;intros;auto. simpl. f_equal. now simpl.
-Qed.
-(*
-Lemma removelast_cons :  forall (A: Type)(e:A)(l:list A), removelast (e::l) = e::(removelast l).
-Proof.
-intros. induction l. simpl. (removelast (e :: l)) = length l.
-*)
-
-Lemma app_nil : forall (A:Type)(l:list A)(e: A), l ++ [e] = [] -> False.
-Proof.
-intros. destruct l; discriminate. 
-Qed.
-
-Lemma app_singleton : forall (A:Type)(l:list A)(e e': A), l ++ [e] = [e'] -> l = [] /\ e = e'.
-Proof.
-intro. destruct l;intros. simpl in H. injection H. auto. simpl in H.
-inversion H. apply app_nil in H2. destruct H2.
-Qed.
-
-(*
-Ltac inversion_TD_nil H :=  inversion H; try 
-                         (match goal with
-                        | [ H' : ?l ++ [?e] = [] |- _ ] => try solve [apply app_nil in H'; contradiction]
-
-                         end);subst.*)
-
-(*
-Lemma Trace_Derive_rev : forall (l:Trace)(c c' : Contract)(e: EventType), 
-Trace_Derive c (l++[e]) (c'/e) -> Trace_Derive c l c'.
-Proof.
-induction l;intros.
-- inversion_TD_nil H. subst. apply app_singleton in H0. subst.
-*)
-(*
-Lemma Trace_Derive_cons : forall (l:Trace)(c c' : Contract)(e: EventType), 
-Trace_Derive (c/e) l c' -> Trace_Derive c (e::l) c'.
-Proof.
-induction l;intros.
-inversion_TD_nil H. subst. rewrite <- (app_nil_l [e]). auto.
-
- 2: { inversion_TD_nil.
-inversion_TD_nil H. 2: { 
-inversion H. 2: { apply app_nil in H0. contradiction. 
-intros.*)
-
-Lemma Trace_Derive_trans : forall s s' c0 c1 c2 , Trace_Derive c0 s c1 -> Trace_Derive c1 s' c2 -> Trace_Derive c0 (s++s') c2.
-Proof.
-intros. induction H;simpl;auto.
-Qed.
-
-(*
-Lemma Trace_Derive_first_der : forall (s:Trace) c0 c1 (e:EventType), Trace_Derive c0 (e :: s) c1 -> Trace_Derive (c0/e) s c1.
-Proof.
-induction s;intros.
-inversion_TD_nil H. apply app_singleton in H0. destruct H0. rewrite H1.
-rewrite H0 in H2. now inversion_TD_nil H2.
-
- subst.
-intros. remember (e::s). induction H. discriminate.
-
--*)
-
-
 
 Lemma trace_derive_spec : forall (c c' : Contract)(s : Trace), (trace_derive c s) = c' <-> Trace_Derive c s c'.
 Proof.
@@ -431,66 +335,6 @@ split;intros.
 - induction H;auto. 
 Qed.
 
-
-
-
-
-
-(*
-Lemma max_derivative_count_non_zero : forall (c : Contract), 0 < max_derivative_count c.
-Proof.
-induction c;simpl;try lia. rewrite (mult_n_O 0) at 1. 
-apply PeanoNat.Nat.mul_lt_mono;auto.  
-transitivity (Nat.pow 2 0). simpl. lia. apply PeanoNat.Nat.pow_lt_mono_r;lia.
-rewrite (PeanoNat.Nat.add_lt_mono_r _ _ 1). simpl.
-assert (1 < Nat.pow 2 (max_derivative_count c)). { apply PeanoNat.Nat.pow_gt_1;lia. }
-lia.
-Qed.*)
-
-
-(*Lemma trace_derive_failure : forall (s : Trace), trace_derive Failure s = Failure.
-Proof. intros;induction s;auto. Qed.
-
-Lemma trace_derive_success : forall (s : Trace), trace_derive Success s = Success \/ trace_derive Success s = Failure.
-Proof.
-induction s.
-- simpl; left;auto.
-- simpl; right;  auto using trace_derive_failure.
-Qed.
-
-Ltac eq_event_destruct :=
-  repeat match goal with
-         | [ |- context[if eq_event_dec ?e ?e then _ else _] ] => destruct (eq_event_dec e e);try contradiction
-         | [ |- context[if eq_event_dec ?e ?e0 then _ else _] ] => destruct (eq_event_dec e e0)
-         end.
-Lemma trace_derive_event : forall (s : Trace)(e :EventType), trace_derive (Event e) s = Event e \/ trace_derive (Event e) s = Success 
-                                                             \/ trace_derive (Event e) s = Failure.
-Proof.
-destruct s;intros;simpl.
-- now left.
-- eq_event_destruct.
-  * right. auto using trace_derive_success.
-  * right. right. apply trace_derive_failure.
-Qed.
-
-
-Lemma trace_derive_plus : forall (c0 c1 : Contract)(s : Trace), trace_derive (c0 _+_ c1) s = (trace_derive c0) s _+_ (trace_derive c1) s.
-Proof.
-intros. funelim (trace_derive (c0 _+_ c1) s);  simpl ; auto.
-Qed.
-
-
-
-Hint Rewrite trace_derive_failure trace_derive_success trace_derive_event : trace_deriveDB.
-
-Ltac saia := simpl ; autorewrite with trace_deriveDB; intuition || auto.
-
-
-Lemma exists_disimilar_event : forall (e : EventType), exists e', e <> e'.
-Proof.
-intros;  destruct e;  try solve [ exists Transfer; intro H;discriminate | exists Notify; intro H;discriminate ].
-Qed.
-Search (In _).*)
 Definition alphabet := [Notify;Transfer].
 Lemma in_alphabet : forall (e : EventType), In e alphabet.
 Proof.
@@ -504,16 +348,7 @@ match n with
 | S n' => f (approx n' f arg)
 end.
 
-(*Lemma approx_spec : forall (A:Type)(P:A -> Prop)(n : nat)(f: A -> A)(arg:A), P (f arg) -> P (approx n f arg).
-Proof.
-intros. induction n.
-- simpl.*)
 
-(*
-Ltac record_destruct :=
-match goal with
-         | [ |- {| r |} => destruct R
-         end.*)
 Definition extend_traces_once (ll : list Trace) : list Trace :=
  flat_map (fun e => map (fun l => e::l) ll) alphabet.
 
@@ -567,14 +402,6 @@ destruct e;simpl.
   rewrite in_flat_map. exists Notify. split;auto using in_alphabet,in_eq.
 Qed.
 
-
-(*Lemma list_length_1 : forall (A:Type)(l:list A), length l = 1 -> exists e, l = [e].
-Proof.
-intros. induction l. discriminate. simpl in H. inversion H.
-apply length_zero_iff_nil in H1. subst. now exists a.
-Qed.*)
-
-
 Lemma in_n_length_traces_inc_iff : forall (n:nat)(e : EventType)(s : Trace), In (e::s) (n_length_traces (S n)) <-> In s (n_length_traces n).
 Proof.
 induction n;split;intros.
@@ -601,36 +428,6 @@ induction n;split;intros.
   rewrite IHn. simpl in H. auto.
 Qed.
 
-(*Lemma n_length_traces_length_aux : forall (n:nat)(s:Trace), In s (n_length_traces n) -> length s = n.
-Proof.
-induction n;intros.
-- simpl in H. destruct H. now subst. contradiction.
-- destruct s.  unfold n_length_traces in H. simpl in H.
-  unfold extend_traces_once in H. rewrite in_flat_map in H. 
-  destruct_ctx. rewrite in_map_iff in H0. destruct_ctx. discriminate. 
-  auto using in_n_length_traces_inc.
-in *. auto using extend_traces_once_length.
-Qed.
-
-Lemma n_length_traces_length_aux : forall (n:nat), Forall (fun s => length s = n)(n_length_traces n).
-Proof.
-induction n;intros.
-- simpl. unfold n_length_traces. simpl. constructor;auto.
-- unfold n_length_traces in *. simpl in *. auto using extend_traces_once_length.
-Qed.
-
-Lemma In_n_length_traces_iff_length : forall (n :nat)(s : Trace), In s (n_length_traces n) <-> length s = n.
-Proof.
-split;auto using length_i_In_n_length_traces.
-intros.
-
-
-
-
-Lemma n_length_traces_length : forall (s:Trace)(n:nat), In s (n_length_traces n) -> length s = n.
-Proof.
-intros. pose proof (n_length_traces_length_aux n). rewrite Forall_forall in H0. auto.
-Qed.*)
  
 Definition nth_derivatives (c : Contract)(n:nat) : list Contract :=  map (trace_derive c) (n_length_traces n).
 
@@ -644,65 +441,7 @@ intros. unfold nth_derivatives. split;intros.
   split. now rewrite trace_derive_spec. now rewrite length_iff_length_traces.
 Qed.
 
-(*Ltac in_map_iff_destruct :=
-  repeat match goal with
-         | [ H: In ?c (map _ _) |- _ ] => rewrite in_map_iff in H
-         | [ H: ?H0 /\ ?H1 |- _ ] => destruct H
-         | [ H: exists _, _  |- _ ] => destruct H
-         end.*)
-(*
-Lemma Trace_Derive_In_nth_derivatives : forall (c c' : Contract)(s:Trace), Trace_Derive c s c' -> In c' (nth_derivatives c (length s)).
-Proof.
-intros. induction H.
-simpl. now left.
-unfold nth_derivatives in *. in_map_iff_destruct.
-rewrite in_map_iff. exists (e::x). split.
-now simpl.
- 
-destruct IHTrace_Derive. 
 
-
-
-destruct IHTrace_Derive. in_map_iff_destruct IHTrace_Derive.
-auto.*)
-(*
-
-Lemma length_removelast : forall (A: Type)(e:A)(l:list A), length (removelast (e :: l)) = length l.
-Proof.
-intros. simpl. generalize dependent e. induction l;intros;auto. simpl. f_equal. now simpl.
-Qed.
-
-(*express lemma with n, so that induction can be done on n, instead of s, generalizing induction hypothesis*)
-Lemma trace_derive_Nth_Derivative_aux: forall (n:nat)(s:Trace)(c: Contract), length s = n -> Nth_Derivative c (trace_derive c s) n.
-Proof.
-induction n;intros. apply length_zero_iff_nil in H. now subst.
-rewrite app_removelast_last with (A:=EventType)(l:=s)(d:=Transfer).
-rewrite derive_trace_derive. constructor. apply IHn.
-destruct s. simpl in H. discriminate. rewrite length_removelast.  simpl in H.
-auto. intro H2. rewrite H2 in H. simpl in H. discriminate.
-Qed.
-
-Lemma trace_derive_Nth_Derivative: forall (s:Trace)(c: Contract), Nth_Derivative c (trace_derive c s) (length s).
-Proof.
-auto using trace_derive_Nth_Derivative_aux.
-Qed.
-
-
-
-Lemma nth_derivatives_spec : forall c c_der n, In c_der (nth_derivatives c n) -> Nth_Derivative c c_der n.
-Proof.
-intros. unfold nth_derivatives in H.
-in_map_iff_destruct H. rewrite <- H.
-apply n_length_traces_length in H0. rewrite <- H0. apply trace_derive_Nth_Derivative.
-Qed.*)
-
-(*
-Lemma nth_derivatives_spec : forall (c : Contract)(s:Trace), In (trace_derive c s) (nth_derivatives c (length s)).
-Proof.
-intros. generalize dependent c. induction s;intros;simpl; try now left.
-unfold nth_derivatives. rewrite in_map_iff. exists (a::s). split ; simpl;auto.
-apply n_length_traces_spec.
-Qed. *)
 Definition simple_n_derivative_closure (c : Contract)(n:nat) := flat_map (nth_derivatives c) (seq 0 (1+n)).
 
 Lemma nth_derivatives_in_closure : forall (c c_der : Contract)(n n':nat), n<=n' -> In c_der (nth_derivatives c n) -> In c_der (simple_n_derivative_closure c n').
@@ -727,51 +466,6 @@ split;intros.
 - destruct_ctx. eapply nth_derivatives_in_closure;eauto.
   rewrite nth_derivatives_iff. exists x. split;auto.
 Qed.
-
-Fixpoint In_mod_ACI (c : Contract) (l : list Contract) :=
-match l with
-| [] => False
-| c' ::l' => c' =ACI= c \/ In_mod_ACI c l'
-end.
-
-Lemma In_mod_ACI_i_In : forall (c : Contract) (l : list Contract), In_mod_ACI c l -> exists c', In c' l /\ c' =ACI= c.
-Proof.
-intros c l. generalize dependent c. induction l;intros.
-- simpl in H. inversion H.
-- simpl in H. destruct H.
-  * exists a. split;auto using in_eq.
-  * apply IHl in H. destruct H. exists x. destruct H. split;auto using in_cons.
-Qed.
-
-Lemma In_i_In_mod_ACI : forall (c : Contract) (l : list Contract), (exists c', In c' l /\ c' =ACI= c) -> In_mod_ACI c l.
-Proof.
-intros. generalize dependent c. induction l;intros.
-- destruct H. destruct H. simpl in H. inversion H.
-- simpl. destruct H. destruct H. simpl in H. inversion H.
-  * subst. now left.
-  * right. apply IHl. exists x;split;auto.
-Qed.
-
-Theorem In_mod_ACI_iff_In : forall (c : Contract) (l : list Contract), In_mod_ACI c l <-> exists c', In c' l /\ c' =ACI= c.
-Proof.
-split; auto using In_i_In_mod_ACI.
-intros. now apply In_mod_ACI_i_In.
-Qed.
-
-Theorem In_mod_ACI_cons : forall (c c' : Contract) (l : list Contract), In_mod_ACI c (c'::l) <-> c' =ACI= c \/ In_mod_ACI c l.
-Proof.
-split;intros.
-- rewrite In_mod_ACI_iff_In in H. destruct_ctx. induction H.
-  * subst. now left.
-  * right. rewrite In_mod_ACI_iff_In. exists x. split;auto.
-- destruct H.
-  * rewrite In_mod_ACI_iff_In. exists c'. split;auto using in_eq.
-  * rewrite In_mod_ACI_iff_In in *. destruct_ctx. exists x.
-    split;auto using in_cons,in_eq.
-Qed. 
-
-
-Definition ACI_preserving (f : Contract -> Contract) := forall c0 c1, c0 =ACI= c1 -> f c0 =ACI= f c1.
 
 Fixpoint max_derivative_count (c : Contract) :=
 match c with
@@ -891,21 +585,6 @@ induction c;intros.
 Qed.
 
 
-Lemma Trace_Derive_seq_head : forall s c0 c1, hd Failure (flatten ((c0 _;_ c1) // s)) = ((c0 // s) _;_ c1).
-Proof.
-induction s;intros. now simpl. simpl. rewrite derive_plus. simpl.
-destruct (flatten_non_empty ((c0 / a _;_ c1) // s)).
-destruct_ctx. rewrite <- IHs. rewrite H. now simpl.
-Qed. 
-
-Lemma Trace_Derive_seq_head2 : forall s c0 c1, exists l, (flatten ((c0 _;_ c1) // s)) = ((c0 // s) _;_ c1):: l.
-Proof.
-induction s;intros. exists []. now simpl. simpl. rewrite derive_plus. simpl.
-destruct (flatten_non_empty ((c0 / a _;_ c1) // s)). specialize IHs with (c0/a) c1.
-destruct_ctx. rewrite H0. exists (x1 ++ (flatten ((o c0 _;_ c1 / a) // s))).
-now simpl.
-Qed. 
-
 Lemma flatten_seq_derivative : forall c0 c1 e, flatten ((c0 _;_ c1)/ e) = [c0/e _;_ c1;o(c0)_;_(c1/e)].
 Proof.
 intros. now simpl.
@@ -918,21 +597,6 @@ rewrite derive_plus. simpl. rewrite derive_plus. simpl.
 rewrite app_nil_r. auto.
 Qed.
 
-(*
-Lemma unfold_derive_o_seq : forall c0 c1 e, (o c0 _;_ c1) / e = Failure _;_ c1 _+_ (o (o c0)) _;_ c1/e.
-Proof.
-intros. simpl. o_destruct. rewrite H at 1. now simpl.
-rewrite H at 1. now simpl.
-Qed.
-
-
-Lemma test2 : forall c0 c1 e, Forall (fun c => exists c' s, c = (o c') _;_ (c1//s)) (flatten ((o c0 _;_ c1)/e)).
-Proof.
-intros. rewrite Forall_forall. intros. rewrite unfold_derive_o_seq in H. simpl in H.
-destruct H. subst. exists Failure. rewrite o_false;auto. exists []. now simpl.
-destruct H. subst. exists (o c0). exists [e]. now simpl. inversion H.
-Qed.*)
-
 Lemma o_derive : forall c e, (o c)/e = Failure.
 Proof.
 intros. o_destruct. unfold o. rewrite H0. now simpl. unfold o. rewrite H0. now simpl.
@@ -944,23 +608,6 @@ induction s;intros;auto.
 Qed.
 
 Hint Immediate o_derive Failure_trace_derive : ClosureDB.
-
-(*
-Lemma test3 : forall s' c0 c1, Forall (fun c => exists c' s, c = (o c') _;_ (c1//s)) (flatten (((o c0) _;_ c1)//s')).
-Proof.
-induction s';intros.
-- rewrite Forall_forall. intros. simpl in H. destruct H.
-  * subst. exists c0. exists []. now simpl.
-  * inversion H.
-- rewrite Forall_forall. intros. simpl in H. rewrite derive_plus in H. simpl in H.
-  apply in_app_or in H. destruct H.
-  * specialize IHs' with Failure c1. rewrite Forall_forall in IHs'.
-    specialize IHs' with x. rewrite o_derive in H. apply IHs' in H. destruct_ctx.
-    exists x0. now exists x1.
-  * specialize IHs' with (o c0) (c1/a). rewrite Forall_forall in IHs'.
-    specialize IHs' with x. apply IHs' in H. destruct_ctx. subst.
-    exists x0. exists (a::x1). now simpl.
-Qed.*)
 
 Lemma o_or : forall (c : Contract), o c = Success \/ o c = Failure.
 Proof.
@@ -998,30 +645,60 @@ induction s;intros.
 - simpl in H. rewrite derive_plus in H. simpl in H. apply in_app_or in H. destruct H; now apply IHs in H.
 Qed.
 
-(*
-Theorem in_flatten_seq_o_derive : forall s c0 c1 c_der0 c_der1, In (c_der0 _;_ c_der1) (flatten (((o c0) _;_ c1) // s)) <-> 
-(c0' = Success \/ c0' = Failure) /\ (c1')
-
- = ((o c0)//s _;_ c1) \/ (s <> [] /\ exists n, c_der = Success _;_ (c1 // (skipn n s)) \/ c_der = Failure _;_ (c1 // (skipn n s))).
-Proof.*)
-
 Lemma o_idempotent : forall (c : Contract), o (o c) = o c.
 Proof.
 intros. destruct (o_or c); rewrite H;auto. 
 Qed.
 
 Hint Immediate o_idempotent : ClosureDB.
+
+
+(****************Code below hasn't been cleaned up**********************************************************)
+
+
 (*
+Fixpoint In_mod_ACI (c : Contract) (l : list Contract) :=
+match l with
+| [] => False
+| c' ::l' => c' =ACI= c \/ In_mod_ACI c l'
+end.
 
-
-
-(c_der0 = (o c0) \/ (s <>[] /\ c_der0 = Failure)) /\ exists n, c_der1 = c1//(skipn n s).
+Lemma In_mod_ACI_i_In : forall (c : Contract) (l : list Contract), In_mod_ACI c l -> exists c', In c' l /\ c' =ACI= c.
 Proof.
+intros c l. generalize dependent c. induction l;intros.
+- simpl in H. inversion H.
+- simpl in H. destruct H.
+  * exists a. split;auto using in_eq.
+  * apply IHl in H. destruct H. exists x. destruct H. split;auto using in_cons.
+Qed.
 
+Lemma In_i_In_mod_ACI : forall (c : Contract) (l : list Contract), (exists c', In c' l /\ c' =ACI= c) -> In_mod_ACI c l.
+Proof.
+intros. generalize dependent c. induction l;intros.
+- destruct H. destruct H. simpl in H. inversion H.
+- simpl. destruct H. destruct H. simpl in H. inversion H.
+  * subst. now left.
+  * right. apply IHl. exists x;split;auto.
+Qed.
 
+Theorem In_mod_ACI_iff_In : forall (c : Contract) (l : list Contract), In_mod_ACI c l <-> exists c', In c' l /\ c' =ACI= c.
+Proof.
+split; auto using In_i_In_mod_ACI.
+intros. now apply In_mod_ACI_i_In.
+Qed.
 
-Theorem in_flatten_seq_o_derive : forall s c0 c1 c_der0 c_der1, In (c_der0 _;_ c_der1) (flatten (((o c0) _;_ c1) // s)) <-> 
-(c_der0 = (o c0) \/ (s <>[] /\ c_der0 = Failure)) /\ exists n, c_der1 = c1//(skipn n s).*)
+Theorem In_mod_ACI_cons : forall (c c' : Contract) (l : list Contract), In_mod_ACI c (c'::l) <-> c' =ACI= c \/ In_mod_ACI c l.
+Proof.
+split;intros.
+- rewrite In_mod_ACI_iff_In in H. destruct_ctx. induction H.
+  * subst. now left.
+  * right. rewrite In_mod_ACI_iff_In. exists x. split;auto.
+- destruct H.
+  * rewrite In_mod_ACI_iff_In. exists c'. split;auto using in_eq.
+  * rewrite In_mod_ACI_iff_In in *. destruct_ctx. exists x.
+    split;auto using in_cons,in_eq.
+Qed. 
+
 
 Ltac derive_plus_tac H := rewrite derive_plus in H; simpl in H; apply in_app_or in H; destruct H.
 Theorem in_flatten_seq_o_derive : forall s e c0 c1 c_der0 c_der1, In (c_der0 _;_ c_der1) (flatten (((o c0) _;_ c1) // (e::s))) <-> 
@@ -1531,7 +1208,29 @@ Proof. Admitted.
 
 
 
+(*
+Fixpoint flatten_contract (c : Contract) : list Contract :=
+match c with
+| c0 _+_ c1 => (flatten_contract c0) ++ (flatten_contract c1)
+| _ => [c]
+end.
 
+Definition aci_eq (c0 c1 : Contract) : bool :=
+ let c0_l := flatten_contract c0 in
+ let c1_l := flatten_contract c1 in
+ (inclb c0_l c1_l) && (inclb c1_l c0_l) .
+
+Definition aci_p_eq (p0 p1: (Contract * Contract)) : bool :=
+ let (c0,c0') := p0 in
+ let (c1,c1') := p1 in
+ aci_eq c0 c1 && aci_eq c0' c1'.*)
+
+(*
+Fixpoint trace_derive (c: Contract) (s : Trace) :=
+match s with
+| [] => c
+| e::s' => trace_derive (c/e) s'
+end.*)
 
 
 
