@@ -697,8 +697,78 @@ split;intros.
   * rewrite In_mod_ACI_iff_In. exists c'. split;auto using in_eq.
   * rewrite In_mod_ACI_iff_In in *. destruct_ctx. exists x.
     split;auto using in_cons,in_eq.
-Qed. 
+Qed. *)
 
+Ltac derive_plus_tac H := rewrite derive_plus in H; simpl in H; apply in_app_or in H; destruct H.
+
+Lemma c_eq_Failure : forall c, Failure _;_ c =R= Failure.
+Proof.
+cofix IH.
+intros. constructor
+Theorem in_flatten_seq_Failure_derive : forall s c1 c_der, In c_der (flatten ((Failure _;_ c1) // s)) -> 
+c_der =R= Failure.
+Proof.
+induction s;intros.
+- simpl in H. destruct H;try contradiction. inversion H. subst.
+  split;auto. exists 0. exists 0. now simpl. destruct_ctx.
+  rewrite firstn_nil in H0. rewrite skipn_nil in H0. subst. left; now simpl.
+- split;intros.
+  * simpl in H. derive_plus_tac H. 
+    ** apply IHs in H. destruct_ctx. subst. split;auto. exists (S x). now simpl.
+    ** apply IHs in H. destruct_ctx. subst. split;auto. exists (S x).
+
+Theorem in_flatten_seq_derive : forall s c0 c1 c_der0 c_der1, In (c_der0 _;_ c_der1) (flatten ((c0 _;_ c1) // s)) <-> 
+(c_der0 _;_ c_der1 = c0 // s _;_ c1) \/ ( s<> [] /\ (c_der0 = Success \/ c_der0 = Failure) /\ exists n_lo n_hi, c_der1 = c1//(firstn n_hi (skipn n_lo s))).
+Proof.
+intro. 
+induction s;intros;simpl.
+- split;intros. destruct H;try contradiction. inversion H. subst. now left.
+  destruct H. inversion H. now left. destruct_ctx. contradiction.
+- split;intros.
+  * rewrite derive_plus in H. simpl in H. apply in_app_or in H. destruct H.
+    ** apply IHs in H. destruct H.
+      *** now left.
+      *** destruct_ctx. destruct H0.
+        **** subst. right. split.  intro H2.  discriminate. split. now left. 
+             exists (S x). exists x0. now simpl.
+        **** subst. right. split. intro H2. discriminate. split. now right.
+             exists (S x). exists x0. now simpl.
+    ** apply IHs in H. destruct H.
+      *** inversion H. subst. right. split. intro H2. discriminate.
+          split. destruct (o_or c0). rewrite H0. 
+          destruct s. simpl. now left. simpl. rewrite Failure_trace_derive.
+          now right. rewrite H0. rewrite Failure_trace_derive. now right.
+          exists 0. exists 1. simpl. auto.
+      *** destruct_ctx. subst. destruct H0.
+        **** rewrite H0. right. split;auto. intro H2. discriminate.
+             split. now left. exists 0. exists x0.
+ Check trace_derive_failure. rewrite  r simpl; left.
+ intuition;try contradiction. auto.
+ destruct H;subst.
+  exists 1. now simpl. split. destruct H. inversion H. subst.
+  destruct (o_or c0). rewrite H0. right. now left. rewrite H0. right. right. auto.
+  inversion H. inversion H. inversion H0. subst. exists 0. now simpl.
+  inversion H0. destruct_ctx. destruct H. destruct x.
+  * simpl in H0. subst. intuition. auto.
+ subst. destruct H;subst. simpl. now right. susbt. 
+ rewrite H.
+ rewrite Heqt in *. simpl in H. destruct H;try contradiction. inversion H.
+  now left. destruct H. rewrite Heqt. simpl. auto. now left.
+  destruct H. subst.  rewrite H.
+
+
+
+Theorem in_flatten_seq_Failure_derive : forall s c1 c_der0 c_der1, In (c_der0 _;_ c_der1) (flatten ((Failure _;_ c1) // s)) <-> 
+c_der0 = Failure /\ exists n_low n_high, c_der1 = c1//(skipn n_low (firstn n_high s)).
+Proof.
+induction s;intros.
+- split;intros;simpl in *. destruct H;try contradiction. inversion H. subst.
+  split;auto. exists 0. exists 0. now simpl. destruct_ctx.
+  rewrite firstn_nil in H0. rewrite skipn_nil in H0. subst. left; now simpl.
+- split;intros.
+  * simpl in H. derive_plus_tac H. 
+    ** apply IHs in H. destruct_ctx. subst. split;auto. exists (S x). now simpl.
+    ** apply IHs in H. destruct_ctx. subst. split;auto. exists (S x).
 
 Ltac derive_plus_tac H := rewrite derive_plus in H; simpl in H; apply in_app_or in H; destruct H.
 Theorem in_flatten_seq_o_derive : forall s e c0 c1 c_der0 c_der1, In (c_der0 _;_ c_der1) (flatten (((o c0) _;_ c1) // (e::s))) <-> 
