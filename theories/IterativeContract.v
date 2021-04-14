@@ -57,13 +57,34 @@ end.
 Definition o (c : Contract) := if nu c then Success else Failure.
 Hint Unfold o : core.
 
+Lemma o_Failure : o Failure = Failure.
+Proof. reflexivity.
+Qed.
+
+Lemma o_Success : o Success = Success.
+Proof. reflexivity.
+Qed.
+
+
+Lemma o_or : forall (c : Contract), o c = Success /\ nu c = true \/ o c = Failure /\ nu c = false.
+Proof.
+intros. unfold o. destruct (nu c) eqn:Heqn; intuition.
+Qed.
+
+Lemma o_idempotent : forall (c : Contract), o (o c) = o c.
+Proof.
+intros. destruct (o_or c). destruct H. rewrite H;auto. destruct H. now rewrite H. 
+Qed.
+
+Hint Rewrite o_Failure o_Success o_idempotent : icDB.
+
 
 (*Derivative of contract with respect to an event*)
 Equations derive (c:Contract) (e:EventType) :Contract :=
 derive Success e := Failure;
 derive Failure e := Failure;
 derive (Event e') e := if (EventType_eq_dec e' e) then Success else Failure;
-derive (c0 _;_ c1) e := (derive c0 e) _;_ c1 _+_ (o c0) _;_ (derive c1 e);
+derive (c0 _;_ c1) e :=  (derive c0 e) _;_ c1 _+_  (o c0) _;_ (derive c1 e);
 derive (c0 _+_ c1) e := (derive c0 e) _+_ (derive c1 e);
 derive (Star c) e := derive c e _;_ (Star c).
 
@@ -71,17 +92,39 @@ Global Transparent derive.
 
 Notation "c / e" := (derive c e)(at level 40, left associativity).
 
+Search (Failure / _).
+
+Ltac destruct_ctx :=
+  repeat match goal with
+         | [ H: ?H0 /\ ?H1 |- _ ] => destruct H
+         | [ H: exists _, _  |- _ ] => destruct H
+         end.
+
+Ltac o_destruct :=
+  match goal with
+         | [ |- context[(o ?c)] ] => destruct (o_or c);destruct_ctx
+         | [ _ : context[ (o ?c)] |- _ ] => destruct (o_or c);destruct_ctx
+         end.
+
+Lemma o_derive : forall c e, (o c)/e = Failure.
+Proof.
+intros. o_destruct. unfold o. rewrite H0. now simpl. unfold o. rewrite H0. now simpl.
+Qed.
+
+Hint Rewrite o_idempotent o_derive : icDB.
+Ltac autoM := auto with icDB.
+(*
 Inductive Trace_Derive : Contract -> Trace -> Contract -> Prop :=
 | Trace_Derive_Nil c : Trace_Derive c [] c
 | Trace_Derive_Cons c s c' e (H: Trace_Derive (c/e) s c') : Trace_Derive c (e::s) c'. (*rule motivated by constructor being analgous to cons on lists*)
-Hint Constructors Trace_Derive : MatchDB.
+Hint Constructors Trace_Derive : icDB.
 
-Ltac autoM := auto with MatchDB.
+Ltac autoM := auto with icDB.
 
 Lemma Trace_Derive_trans : forall s s' c0 c1 c2 , Trace_Derive c0 s c1 -> Trace_Derive c1 s' c2 -> Trace_Derive c0 (s++s') c2.
 Proof.
 intros. induction H;simpl;autoM.
-Qed.
+Qed.*)
 
 
 
@@ -92,6 +135,7 @@ Global Transparent trace_derive.
 
 Notation "c // s" := (trace_derive c s)(at level 42, left associativity).
 
+(*
 Lemma trace_derive_spec : forall (c c' : Contract)(s : Trace), c // s = c' <-> Trace_Derive c s c'.
 Proof.
 split;intros.
@@ -102,7 +146,7 @@ Qed.
 Lemma trace_derive_spec2 : forall (c : Contract)(s : Trace), Trace_Derive c s (c // s).
 Proof.
 intros. remember (c//s). symmetry in Heqc0. now rewrite <- trace_derive_spec.
-Qed.
+Qed.*)
 
 
 Definition matchesb (c : Contract)(s : Trace) := nu (c//s).
@@ -132,7 +176,7 @@ Inductive Matches_Comp : Trace -> Contract -> Prop :=
 
 Derive Signature for Matches_Comp.
 
-Hint Constructors Matches_Comp : MatchDB.
+Hint Constructors Matches_Comp : icDB.
 
 Ltac eq_event_destruct :=
   repeat match goal with
@@ -140,23 +184,6 @@ Ltac eq_event_destruct :=
          | [ |- context[if EventType_eq_dec ?e ?e0 then _ else _] ] => destruct (EventType_eq_dec e e0)
          | [ _ : context[if EventType_eq_dec ?e ?e then _ else _]  |- _ ] => destruct (EventType_eq_dec e e);try contradiction
          | [ _ : context[if EventType_eq_dec ?e ?e0 then _ else _] |- _ ] => destruct (EventType_eq_dec e e0)
-         end.
-
-Lemma o_or : forall (c : Contract), o c = Success /\ nu c = true \/ o c = Failure /\ nu c = false.
-Proof.
-intros. unfold o. destruct (nu c) eqn:Heqn; intuition.
-Qed.
-
-Ltac destruct_ctx :=
-  repeat match goal with
-         | [ H: ?H0 /\ ?H1 |- _ ] => destruct H
-         | [ H: exists _, _  |- _ ] => destruct H
-         end.
-
-Ltac o_destruct :=
-  match goal with
-         | [ |- context[(o ?c)] ] => destruct (o_or c);destruct_ctx
-         | [ _ : context[ (o ?c)] |- _ ] => destruct (o_or c);destruct_ctx
          end.
 
 Lemma seq_Success : forall c s, s ==~ Success _;_ c <-> s ==~ c.
@@ -169,6 +196,8 @@ Lemma seq_Failure : forall c s, s ==~ Failure _;_ c <-> s ==~ Failure.
 Proof.
 split;intros. inversion H. inversion H3. inversion H.
 Qed.
+
+Hint Resolve seq_Success seq_Failure : icDB.
 
 (*
 Lemma o_or : forall (c0 c1 : Contract)(s : Trace), s ==~ o c0 _;_ c1 -> nu c0 = true /\ s ==~ c1 \/ nu c0 = false /\ s ==~ Failure.
@@ -185,7 +214,7 @@ Qed.
 
 Lemma o_true : forall (c: Contract), nu c = true -> o c = Success.
 Proof.
-intros. o_destruct;auto with MatchDB. rewrite H in H1. discriminate. 
+intros. o_destruct;auto with icDB. rewrite H in H1. discriminate. 
 Qed.
 
 Lemma o_false : forall (c: Contract), nu c = false -> o c = Failure.
@@ -193,7 +222,7 @@ Proof.
 intros. o_destruct. rewrite H in H1. discriminate. auto. 
 Qed.
 
-Hint Rewrite derive_plus  : MatchDB.
+Hint Rewrite derive_plus : icDB.
 
 Lemma nu_seq_derive : forall (e : EventType)(c0 c1 : Contract), 
 nu c0 = true -> nu (c1 / e) = true -> nu ((c0 _;_ c1) / e) = true.
@@ -212,27 +241,29 @@ induction s;intros. now simpl. simpl. rewrite o_false;auto.
 rewrite derive_plus. simpl. now repeat rewrite IHs.
 Qed.
 
+Hint Rewrite nu_Failure : icDB.
+
 Lemma nu_Success : forall (s : Trace)(c : Contract), nu ((Success _;_ c)//s) = nu (c//s).
 Proof.
-induction s;intros;simpl;auto. simp o. rewrite derive_plus.
-simpl. rewrite nu_Failure. simpl. now rewrite IHs.
+induction s;intros;simpl;auto. 
+autorewrite with icDB using simpl;auto.
 Qed.
 
-Hint Rewrite nu_Failure nu_Success : MatchDB.
+Hint Rewrite nu_Failure nu_Success : icDB.
 
 Lemma nu_seq_trace_derive : forall (s1 : Trace)(c0 c1 : Contract), 
 nu c0 = true -> nu (c1 // s1) = true -> nu ((c0 _;_ c1) // s1) = true.
 Proof.
 induction s1;intros;simpl in *. intuition.
-rewrite o_true;auto. rewrite derive_plus. simpl. autorewrite with MatchDB.
-rewrite H0. now rewrite orb_comm.
+rewrite o_true;auto. rewrite derive_plus. simpl. autorewrite with icDB.
+rewrite H0. btauto.
 Qed.
 
 Lemma matchesb_seq : forall (s0 s1 : Trace)(c0 c1 : Contract), nu (c0//s0) = true -> nu (c1//s1) = true -> nu ((c0 _;_c1) // (s0++s1)) = true.
 Proof.
 induction s0;intros;simpl in *.
 - rewrite nu_seq_trace_derive; auto. 
-- autorewrite with MatchDB. simpl. rewrite orb_true_iff. left.
+- autorewrite with icDB. simpl. rewrite orb_true_iff. left. 
   rewrite IHs0;auto.
 Qed.
 
@@ -241,8 +272,8 @@ Proof.
 intros. induction H;auto.
 - simpl. eq_event_destruct. reflexivity.
 - rewrite matchesb_seq;auto.
-- autorewrite with MatchDB. simpl. intuition.
-- autorewrite with MatchDB. simpl. intuition.
+- autorewrite with icDB. simpl. intuition.
+- autorewrite with icDB. simpl. intuition.
 - destruct s1. now simpl. simpl. rewrite matchesb_seq;auto.
 Qed.
 
@@ -261,22 +292,25 @@ Proof.
 induction c;intros; try solve [simpl in H; inversion H].
 - simpl in H. eq_event_destruct. inversion H. subst. autoM. inversion H.
 - simpl in H. inversion H; autoM. 
-- simpl in H. inversion H. inversion H2. subst. rewrite app_comm_cons. autoM.
-  subst. o_destruct.  
-  * rewrite H0 in H1. rewrite <- (app_nil_l (e::s)). constructor. now rewrite Matches_Comp_nil in H2.
-    rewrite seq_Success in H1. auto. 
-  * rewrite H0 in H1. inversion H1. inversion H6.
+- simpl in H. inversion H.
+  * inversion H2. subst. rewrite app_comm_cons. 
+    auto with icDB.
+  * inversion H1. subst. o_destruct. rewrite H0 in *.
+    inversion H7. simpl. 
+    rewrite <- (app_nil_l (e::s0)). subst. constructor.
+     now rewrite <- Matches_Comp_nil. auto. rewrite H0 in *.
+     inversion H7.
 - inversion H. rewrite app_comm_cons. autoM.
 Qed.
 
 
 
 
-Lemma Matches_Comp_iff_matchesb : forall (c : Contract)(s : Trace), s ==~ c <-> matchesb c s = true.
+Lemma Matches_Comp_iff_matchesb : forall (c : Contract)(s : Trace), s ==~ c <-> nu (c // s) = true.
 Proof.
 split;intros.
 - unfold matchesb. auto using Matches_Comp_i_matchesb.
-- generalize dependent c. induction s;intros. unfold matchesb in H.
+- generalize dependent c. induction s;intros. 
   simpl in H. now rewrite <- Matches_Comp_nil.
   auto using Matches_Comp_derive.
 Qed.
@@ -285,5 +319,52 @@ Qed.
 Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s ==~ c <-> s ==~ c / e.
 Proof.
 intros. repeat rewrite Matches_Comp_iff_matchesb.  reflexivity.
+Qed.
+
+Fixpoint plus_fold (l : list Contract) : Contract :=
+match l with
+| [] => Failure
+| c ::l => c _+_ (plus_fold l)
+end.
+
+Lemma plus_assoc : forall (c1 c2 c3 : Contract), (forall s, s==~((c1 _+_ c2) _+_ c3) <-> s ==~ (c1 _+_ (c2 _+_ c3))).
+Proof.
+split;intros. inversion H;autoM. inversion H2;autoM. inversion H;autoM. inversion H1;autoM.
+Qed.
+
+Lemma plus_fold_app : forall (s:Trace)(l1 l2 : list Contract), 
+s ==~ plus_fold (l1 ++ l2) <-> s ==~ (plus_fold l1) _+_ (plus_fold l2).
+Proof.
+intro. induction l1.
+- intros. split.
+  * intros. simpl in H. autoM.
+  * intros. simpl. simpl in H. inversion H. {  inversion H2. } assumption.
+- intros. split.
+  * intros. simpl in *. inversion H ; autoM. subst.
+    rewrite IHl1 in H1. rewrite plus_assoc. apply MPlusR;autoM. 
+  * intros. simpl in *. apply plus_assoc in H. inversion H;autoM.
+    apply MPlusR. rewrite IHl1. autoM. 
+Qed.
+
+
+Lemma in_plus_fold : forall (s : Trace)(l : list Contract), s ==~ plus_fold l <-> 
+(exists c, In c l /\ s ==~ c).
+Proof.
+intros. split.
+- induction l.
+  * intros. simpl in H. inversion H.
+  * intros. simpl in H. inversion H;autoM. 
+    ** exists a. split. apply in_eq. assumption.
+    ** apply IHl in H1 as [c' [P1 P2]]. exists c'. split ; auto using  in_cons.
+- intros. destruct H as [ c' [P1 P2]]. induction l.
+  * destruct P1.
+  * simpl in P1. destruct P1.
+    ** subst. simpl. autoM.
+    ** simpl. autoM.
+Qed.
+
+Lemma plus_fold_derive : forall (l : list Contract) (e : EventType), (plus_fold l) / e = plus_fold (map (fun c => c/e) l).
+Proof.
+induction l;intros;simpl;auto;f_equal;auto.
 Qed.
 
