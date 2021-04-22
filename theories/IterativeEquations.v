@@ -130,7 +130,6 @@ Inductive c_eq_aci : Contract -> Contract -> Prop :=
     | cc_plus_idemp c : c _+_ c =ACI= c 
     | cc_trans c0 c1 c2 (H1 : c0 =ACI= c1) (H2 : c1 =ACI= c2) : c0 =ACI= c2 (*transitivity*)
     | cc_ctx_plus c0 c0' c1 c1' (H1 : c0 =ACI= c0') (H2 : c1 =ACI= c1') : c0 _+_ c1 =ACI= c0' _+_ c1' (*ctx rules*)
-    | cc_ctx_seq c0 c0' c1 c1' (H1 : c0 =ACI= c0') (H2 : c1 =ACI= c1') : c0 _;_ c1 =ACI= c0' _;_ c1'
     | cc_refl c : c =ACI= c
     | cc_sym c0 c1 (H : c0 =ACI= c1) : c1 =ACI= c0
     where "c0 =ACI= c1" := (c_eq_aci c0 c1).
@@ -148,19 +147,11 @@ Proof.
   intros. auto.
 Qed.
 
-Add Parametric Morphism : CSeq with
-signature c_eq_aci ==> c_eq_aci ==> c_eq_aci as c_eq_aci_seq_morphism.
-Proof.
-  intros. auto.
-Qed.
-
-
 Lemma c_eq_aci_nu : forall c0 c1, c0 =ACI= c1 -> nu c0 = nu c1.
 Proof.
 intros. induction H;simpl; try btauto.
 - rewrite IHc_eq_aci1. auto.
 - rewrite IHc_eq_aci1. now rewrite IHc_eq_aci2. 
-- rewrite IHc_eq_aci1. now rewrite IHc_eq_aci2.
 - intuition. 
 Qed. 
 
@@ -178,8 +169,6 @@ Qed.
 Lemma c_eq_aci_derive : forall c0 c1, c0 =ACI= c1 -> (forall e, c0/e =ACI= c1/e).
 Proof.
 intros. induction H; try solve [simpl ; eauto].
-simpl. apply cc_ctx_plus;auto. apply cc_ctx_seq;auto. nu_destruct;auto.
-apply o_aci in H. now rewrite H.
 Qed.
 
 
@@ -322,6 +311,11 @@ Lemma plus_comm_ceq : forall c0 c1, (c0 _+_ c1) =R= (c1 _+_ c0).
 Proof. c_eq_tac. Qed.
 
 Hint Immediate plus_comm_ceq : coDB.
+
+Lemma plus_assoc_ceq : forall c0 c1 c2, (c0 _+_ c1) _+_ c2 =R= c0 _+_ (c1 _+_ c2).
+Proof. c_eq_tac. Qed.
+
+Hint Resolve c_eq_plus_morphism plus_assoc_ceq : coDB.
 
 Ltac c_eq_match_tac := intros;rewrite c_eq_iff; auto with icDB.
 

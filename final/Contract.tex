@@ -1,0 +1,595 @@
+\documentclass[12pt]{report}
+\usepackage[]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fullpage}
+\usepackage{coqdoc}
+\usepackage{amsmath,amssymb}
+\usepackage{url}
+\begin{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% This file has been automatically generated with the command
+%% coqdoc --latex Contract.v 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\coqlibrary{Contract}{Library }{Contract}
+
+\begin{coqdoccode}
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Lists.List}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{FunInd}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Bool.Bool}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Bool.Sumbool}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Structures.GenericMinMax}.\coqdoceol
+\coqdocnoindent
+\coqdockw{From} \coqdockw{Equations} \coqdockw{Require} \coqdockw{Import} \coqdockw{Equations}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Import} \coqdocvar{ListNotations}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{micromega.Lia}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Setoid}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Init.Tauto} \coqdocvar{btauto.Btauto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Require} \coqdockw{Import} \coqdocvar{Logic.ClassicalFacts}.\coqdoceol
+\coqdocemptyline
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Inductive} \coqdocvar{EventType} : \coqdockw{Type} :=\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Transfer} : \coqdocvar{EventType}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Notify} : \coqdocvar{EventType}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Scheme} \coqdocvar{Equality} \coqdockw{for} \coqdocvar{EventType}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Definition} \coqdocvar{Trace} := \coqdocvar{List.list} \coqdocvar{EventType} \% \coqdockw{type}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Inductive} \coqdocvar{Contract} : \coqdockw{Set} :=\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Success} : \coqdocvar{Contract}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Failure} : \coqdocvar{Contract}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Event} : \coqdocvar{EventType} \ensuremath{\rightarrow} \coqdocvar{Contract}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{CPlus} : \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdocvar{Contract}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{CSeq} : \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdocvar{Contract}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Notation} "e \_.\_ c" := (\coqdocvar{CSeq} (\coqdocvar{Event} \coqdocvar{e}) \coqdocvar{c})\coqdoceol
+\coqdocindent{10.00em}
+(\coqdoctac{at} \coqdockw{level} 51, \coqdoctac{right} \coqdockw{associativity}).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Notation} "c0 \_;\_ c1"  := (\coqdocvar{CSeq} \coqdocvar{c0} \coqdocvar{c1})\coqdoceol
+\coqdocindent{12.50em}
+(\coqdoctac{at} \coqdockw{level} 52, \coqdoctac{left} \coqdockw{associativity}).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Notation} "c0 \_+\_ c1"  := (\coqdocvar{CPlus} \coqdocvar{c0} \coqdocvar{c1})\coqdoceol
+\coqdocindent{12.50em}
+(\coqdoctac{at} \coqdockw{level} 53, \coqdoctac{left} \coqdockw{associativity}).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Scheme} \coqdocvar{Equality} \coqdockw{for} \coqdocvar{Contract}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Fixpoint} \coqdocvar{nu}(\coqdocvar{c}:\coqdocvar{Contract}):\coqdocvar{bool} :=\coqdoceol
+\coqdocnoindent
+\coqdockw{match} \coqdocvar{c} \coqdockw{with}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Success} \ensuremath{\Rightarrow} \coqdocvar{true}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Failure} \ensuremath{\Rightarrow} \coqdocvar{false}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Event} \coqdocvar{e} \ensuremath{\Rightarrow} \coqdocvar{false}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c1} \ensuremath{\Rightarrow} \coqdocvar{nu} \coqdocvar{c0} \&\& \coqdocvar{nu} \coqdocvar{c1}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{c0} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c1} \ensuremath{\Rightarrow} \coqdocvar{nu} \coqdocvar{c0} || \coqdocvar{nu} \coqdocvar{c1}\coqdoceol
+\coqdocnoindent
+\coqdockw{end}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Definition} \coqdocvar{o} (\coqdocvar{c} : \coqdocvar{Contract}) := \coqdockw{if} \coqdocvar{nu} \coqdocvar{c} \coqdockw{then} \coqdocvar{Success} \coqdockw{else} \coqdocvar{Failure}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Hint Unfold} \coqdocvar{o} : \coqdocvar{core}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_Failure} : \coqdocvar{o} \coqdocvar{Failure} = \coqdocvar{Failure}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}. \coqdoctac{reflexivity}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_Success} : \coqdocvar{o} \coqdocvar{Success} = \coqdocvar{Success}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}. \coqdoctac{reflexivity}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_or} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract}), \coqdocvar{o} \coqdocvar{c} = \coqdocvar{Success} \ensuremath{\land} \coqdocvar{nu} \coqdocvar{c} = \coqdocvar{true} \ensuremath{\lor} \coqdocvar{o} \coqdocvar{c} = \coqdocvar{Failure} \ensuremath{\land} \coqdocvar{nu} \coqdocvar{c} = \coqdocvar{false}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{unfold} \coqdocvar{o}. \coqdoctac{destruct} (\coqdocvar{nu} \coqdocvar{c}) \coqdocvar{eqn}:\coqdocvar{Heqn}; \coqdoctac{intuition}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_idempotent} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract}), \coqdocvar{o} (\coqdocvar{o} \coqdocvar{c}) = \coqdocvar{o} \coqdocvar{c}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{destruct} (\coqdocvar{o\_or} \coqdocvar{c}). \coqdoctac{destruct} \coqdocvar{H}. \coqdoctac{rewrite} \coqdocvar{H};\coqdoctac{auto}. \coqdoctac{destruct} \coqdocvar{H}. \coqdocvar{now} \coqdoctac{rewrite} \coqdocvar{H}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Rewrite} \coqdocvar{o\_Failure} \coqdocvar{o\_Success} \coqdocvar{o\_idempotent} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Reserved Notation} "e \symbol{92} c" (\coqdoctac{at} \coqdockw{level} 40, \coqdoctac{left} \coqdockw{associativity}).\coqdoceol
+\coqdocnoindent
+\coqdockw{Equations} \coqdocvar{derive} (\coqdocvar{e}:\coqdocvar{EventType}) (\coqdocvar{c}:\coqdocvar{Contract}) :\coqdocvar{Contract} := \{\coqdoceol
+\coqdocnoindent
+\coqdocvar{e} \symbol{92} \coqdocvar{Success} := \coqdocvar{Failure};\coqdoceol
+\coqdocnoindent
+\coqdocvar{e} \symbol{92} \coqdocvar{Failure} := \coqdocvar{Failure};\coqdoceol
+\coqdocnoindent
+\coqdocvar{e} \symbol{92} (\coqdocvar{Event} \coqdocvar{e'}) := \coqdockw{if} (\coqdocvar{EventType\_eq\_dec} \coqdocvar{e'} \coqdocvar{e}) \coqdockw{then} \coqdocvar{Success} \coqdockw{else} \coqdocvar{Failure};\coqdoceol
+\coqdocnoindent
+\coqdocvar{e} \symbol{92} (\coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c1}) := \coqdocvar{o} \coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{e} \symbol{92} \coqdocvar{c1} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{e} \symbol{92} \coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c1};\coqdoceol
+\coqdocnoindent
+\coqdocvar{e} \symbol{92} (\coqdocvar{c0} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c1}) := \coqdocvar{e} \symbol{92} \coqdocvar{c0} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{e} \symbol{92} \coqdocvar{c1}\}\coqdoceol
+\coqdocnoindent
+\coqdockw{where} "e \symbol{92} c" := (\coqdocvar{derive} \coqdocvar{e} \coqdocvar{c}).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Global Transparent} \coqdocvar{derive}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Ltac} \coqdocvar{destruct\_ctx} :=\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{repeat} \coqdockw{match} \coqdockw{goal} \coqdockw{with}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \coqdocvar{H}: ?\coqdocvar{H0} \ensuremath{\land} ?\coqdocvar{H1} \ensuremath{\vdash} \coqdocvar{\_} ] \ensuremath{\Rightarrow} \coqdoctac{destruct} \coqdocvar{H}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \coqdocvar{H}: \coqdoctac{\ensuremath{\exists}} \coqdocvar{\_}, \coqdocvar{\_}  \ensuremath{\vdash} \coqdocvar{\_} ] \ensuremath{\Rightarrow} \coqdoctac{destruct} \coqdocvar{H}\coqdoceol
+\coqdocindent{4.50em}
+\coqdockw{end}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Ltac} \coqdocvar{o\_destruct} :=\coqdoceol
+\coqdocindent{1.00em}
+\coqdockw{match} \coqdockw{goal} \coqdockw{with}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \ensuremath{\vdash} \coqdockw{context}[(\coqdocvar{o} ?\coqdocvar{c})] ] \ensuremath{\Rightarrow} \coqdoctac{destruct} (\coqdocvar{o\_or} \coqdocvar{c});\coqdocvar{destruct\_ctx}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \coqdocvar{\_} : \coqdockw{context}[ (\coqdocvar{o} ?\coqdocvar{c})] \ensuremath{\vdash} \coqdocvar{\_} ] \ensuremath{\Rightarrow} \coqdoctac{destruct} (\coqdocvar{o\_or} \coqdocvar{c});\coqdocvar{destruct\_ctx}\coqdoceol
+\coqdocindent{4.50em}
+\coqdockw{end}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_derive} : \coqdockw{\ensuremath{\forall}} \coqdocvar{c} \coqdocvar{e}, (\coqdocvar{o} \coqdocvar{c})/\coqdocvar{e} = \coqdocvar{Failure}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdocvar{o\_destruct}. \coqdoctac{unfold} \coqdocvar{o}. \coqdoctac{rewrite} \coqdocvar{H0}. \coqdocvar{now} \coqdoctac{simpl}. \coqdoctac{unfold} \coqdocvar{o}. \coqdoctac{rewrite} \coqdocvar{H0}. \coqdocvar{now} \coqdoctac{simpl}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Rewrite} \coqdocvar{o\_idempotent} \coqdocvar{o\_derive} : \coqdocvar{icDB}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Ltac} \coqdocvar{autoM} := \coqdoctac{auto} \coqdockw{with} \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Inductive} \coqdocvar{Trace\_Derive} : \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdocvar{Trace} \ensuremath{\rightarrow} \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdockw{Prop} :=\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Trace\_Derive\_Nil} \coqdocvar{c} : \coqdocvar{Trace\_Derive} \coqdocvar{c} [] \coqdocvar{c}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{Trace\_Derive\_Cons} \coqdocvar{c} \coqdocvar{s} \coqdocvar{c'} \coqdocvar{e} (\coqdocvar{H}: \coqdocvar{Trace\_Derive} (\coqdocvar{c}/\coqdocvar{e}) \coqdocvar{s} \coqdocvar{c'}) : \coqdocvar{Trace\_Derive} \coqdocvar{c} (\coqdocvar{e}::\coqdocvar{s}) \coqdocvar{c'}. \coqdocnoindent
+\coqdockw{Hint Constructors} \coqdocvar{Trace\_Derive} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{Trace\_Derive\_trans} : \coqdockw{\ensuremath{\forall}} \coqdocvar{s} \coqdocvar{s'} \coqdocvar{c0} \coqdocvar{c1} \coqdocvar{c2} , \coqdocvar{Trace\_Derive} \coqdocvar{c0} \coqdocvar{s} \coqdocvar{c1} \ensuremath{\rightarrow} \coqdocvar{Trace\_Derive} \coqdocvar{c1} \coqdocvar{s'} \coqdocvar{c2} \ensuremath{\rightarrow} \coqdocvar{Trace\_Derive} \coqdocvar{c0} (\coqdocvar{s}++\coqdocvar{s'}) \coqdocvar{c2}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{induction} \coqdocvar{H};\coqdoctac{simpl};\coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Equations} \coqdocvar{trace\_derive} (\coqdocvar{c} : \coqdocvar{Contract}) (\coqdocvar{s} : \coqdocvar{Trace}) : \coqdocvar{Contract} :=\coqdoceol
+\coqdocnoindent
+\coqdocvar{trace\_derive} \coqdocvar{c} [] := \coqdocvar{c};\coqdoceol
+\coqdocnoindent
+\coqdocvar{trace\_derive} \coqdocvar{c} (\coqdocvar{e}::\coqdocvar{s'}) := \coqdocvar{trace\_derive} (\coqdocvar{c}/\coqdocvar{e}) \coqdocvar{s'}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Global Transparent} \coqdocvar{trace\_derive}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Notation} "c // s" := (\coqdocvar{trace\_derive} \coqdocvar{c} \coqdocvar{s})(\coqdoctac{at} \coqdockw{level} 42, \coqdoctac{left} \coqdockw{associativity}).\coqdoceol
+\coqdocemptyline
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Definition} \coqdocvar{matchesb} (\coqdocvar{c} : \coqdocvar{Contract})(\coqdocvar{s} : \coqdocvar{Trace}) := \coqdocvar{nu} (\coqdocvar{c}//\coqdocvar{s}).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Reserved Notation} "s ==\~{} re" (\coqdoctac{at} \coqdockw{level} 63).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Inductive} \coqdocvar{Matches\_Comp} : \coqdocvar{Trace} \ensuremath{\rightarrow} \coqdocvar{Contract} \ensuremath{\rightarrow} \coqdockw{Prop} :=\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{|} \coqdocvar{MSuccess} : [] ==\~{} \coqdocvar{Success}\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{|} \coqdocvar{MEvent} \coqdocvar{x} : [\coqdocvar{x}] ==\~{} (\coqdocvar{Event} \coqdocvar{x})\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{|} \coqdocvar{MSeq} \coqdocvar{s1} \coqdocvar{c1} \coqdocvar{s2} \coqdocvar{c2}\coqdoceol
+\coqdocindent{6.50em}
+(\coqdocvar{H1} : \coqdocvar{s1} ==\~{} \coqdocvar{c1})\coqdoceol
+\coqdocindent{6.50em}
+(\coqdocvar{H2} : \coqdocvar{s2} ==\~{} \coqdocvar{c2})\coqdoceol
+\coqdocindent{5.50em}
+: (\coqdocvar{s1} ++ \coqdocvar{s2}) ==\~{} (\coqdocvar{c1} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c2})\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{|} \coqdocvar{MPlusL} \coqdocvar{s1} \coqdocvar{c1} \coqdocvar{c2}\coqdoceol
+\coqdocindent{8.00em}
+(\coqdocvar{H1} : \coqdocvar{s1} ==\~{} \coqdocvar{c1})\coqdoceol
+\coqdocindent{7.00em}
+: \coqdocvar{s1} ==\~{} (\coqdocvar{c1} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c2})\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{|} \coqdocvar{MPlusR} \coqdocvar{c1} \coqdocvar{s2} \coqdocvar{c2}\coqdoceol
+\coqdocindent{8.00em}
+(\coqdocvar{H2} : \coqdocvar{s2} ==\~{} \coqdocvar{c2})\coqdoceol
+\coqdocindent{7.00em}
+: \coqdocvar{s2} ==\~{} (\coqdocvar{c1} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c2})\coqdoceol
+\coqdocindent{0.50em}
+\coqdoceol
+\coqdocindent{1.00em}
+\coqdockw{where} "s ==\~{} c" := (\coqdocvar{Matches\_Comp} \coqdocvar{s} \coqdocvar{c}).\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdocvar{Derive} \coqdocvar{Signature} \coqdockw{for} \coqdocvar{Matches\_Comp}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Constructors} \coqdocvar{Matches\_Comp} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Ltac} \coqdocvar{eq\_event\_destruct} :=\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{repeat} \coqdockw{match} \coqdockw{goal} \coqdockw{with}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \ensuremath{\vdash} \coqdockw{context}[\coqdockw{if} \coqdocvar{EventType\_eq\_dec} ?\coqdocvar{e} ?\coqdocvar{e} \coqdockw{then} \coqdocvar{\_} \coqdockw{else} \coqdocvar{\_}] ] \ensuremath{\Rightarrow} \coqdoctac{destruct} (\coqdocvar{EventType\_eq\_dec} \coqdocvar{e} \coqdocvar{e});\coqdoctac{try} \coqdocvar{contradiction}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \ensuremath{\vdash} \coqdockw{context}[\coqdockw{if} \coqdocvar{EventType\_eq\_dec} ?\coqdocvar{e} ?\coqdocvar{e0} \coqdockw{then} \coqdocvar{\_} \coqdockw{else} \coqdocvar{\_}] ] \ensuremath{\Rightarrow} \coqdoctac{destruct} (\coqdocvar{EventType\_eq\_dec} \coqdocvar{e} \coqdocvar{e0})\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \coqdocvar{\_} : \coqdockw{context}[\coqdockw{if} \coqdocvar{EventType\_eq\_dec} ?\coqdocvar{e} ?\coqdocvar{e} \coqdockw{then} \coqdocvar{\_} \coqdockw{else} \coqdocvar{\_}]  \ensuremath{\vdash} \coqdocvar{\_} ] \ensuremath{\Rightarrow} \coqdoctac{destruct} (\coqdocvar{EventType\_eq\_dec} \coqdocvar{e} \coqdocvar{e});\coqdoctac{try} \coqdocvar{contradiction}\coqdoceol
+\coqdocindent{4.50em}
+\ensuremath{|} [ \coqdocvar{\_} : \coqdockw{context}[\coqdockw{if} \coqdocvar{EventType\_eq\_dec} ?\coqdocvar{e} ?\coqdocvar{e0} \coqdockw{then} \coqdocvar{\_} \coqdockw{else} \coqdocvar{\_}] \ensuremath{\vdash} \coqdocvar{\_} ] \ensuremath{\Rightarrow} \coqdoctac{destruct} (\coqdocvar{EventType\_eq\_dec} \coqdocvar{e} \coqdocvar{e0})\coqdoceol
+\coqdocindent{4.50em}
+\coqdockw{end}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{seq\_Success} : \coqdockw{\ensuremath{\forall}} \coqdocvar{c} \coqdocvar{s}, \coqdocvar{s} ==\~{} \coqdocvar{Success} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c} \ensuremath{\leftrightarrow} \coqdocvar{s} ==\~{} \coqdocvar{c}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{split};\coqdoctac{intros}. \coqdoctac{inversion} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H3}. \coqdoctac{subst}. \coqdocvar{now} \coqdoctac{simpl}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{rewrite} \ensuremath{\leftarrow} (\coqdocvar{app\_nil\_l} \coqdocvar{s}). \coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{seq\_Failure} : \coqdockw{\ensuremath{\forall}} \coqdocvar{c} \coqdocvar{s}, \coqdocvar{s} ==\~{} \coqdocvar{Failure} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c} \ensuremath{\leftrightarrow} \coqdocvar{s} ==\~{} \coqdocvar{Failure}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{split};\coqdoctac{intros}. \coqdoctac{inversion} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H3}. \coqdoctac{inversion} \coqdocvar{H}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Resolve} \coqdocvar{seq\_Success} \coqdocvar{seq\_Failure} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{derive\_plus} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s} : \coqdocvar{Trace})(\coqdocvar{c0} \coqdocvar{c1} : \coqdocvar{Contract}), (\coqdocvar{c0} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c1}) // \coqdocvar{s} = \coqdocvar{c0}//\coqdocvar{s} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c1}//\coqdocvar{s}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{s};\coqdoctac{intros};\coqdoctac{simpl};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_true} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c}: \coqdocvar{Contract}), \coqdocvar{nu} \coqdocvar{c} = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{o} \coqdocvar{c} = \coqdocvar{Success}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdocvar{o\_destruct};\coqdoctac{auto} \coqdockw{with} \coqdocvar{icDB}. \coqdoctac{rewrite} \coqdocvar{H} \coqdoctac{in} \coqdocvar{H1}. \coqdoctac{discriminate}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{o\_false} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c}: \coqdocvar{Contract}), \coqdocvar{nu} \coqdocvar{c} = \coqdocvar{false} \ensuremath{\rightarrow} \coqdocvar{o} \coqdocvar{c} = \coqdocvar{Failure}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdocvar{o\_destruct}. \coqdoctac{rewrite} \coqdocvar{H} \coqdoctac{in} \coqdocvar{H1}. \coqdoctac{discriminate}. \coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Rewrite} \coqdocvar{derive\_plus} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{nu\_seq\_derive} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{e} : \coqdocvar{EventType})(\coqdocvar{c0} \coqdocvar{c1} : \coqdocvar{Contract}), \coqdoceol
+\coqdocnoindent
+\coqdocvar{nu} \coqdocvar{c0} = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{nu} (\coqdocvar{c1} / \coqdocvar{e}) = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{nu} ((\coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c1}) / \coqdocvar{e}) = \coqdocvar{true}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{simpl}. \coqdoctac{rewrite} \coqdocvar{orb\_true\_iff}. \coqdoctac{left}. \coqdoctac{rewrite} \coqdocvar{o\_true};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{nu\_plus} : \coqdockw{\ensuremath{\forall}} \coqdocvar{c0} \coqdocvar{c1}, \coqdocvar{nu} (\coqdocvar{c0} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c1}) = \coqdocvar{true} \ensuremath{\leftrightarrow} \coqdocvar{nu} \coqdocvar{c0} = \coqdocvar{true} \ensuremath{\lor} \coqdocvar{nu} \coqdocvar{c1} = \coqdocvar{true}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{simpl}. \coqdocvar{now} \coqdoctac{rewrite} \coqdocvar{orb\_true\_iff}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{nu\_Failure} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s} : \coqdocvar{Trace})(\coqdocvar{c} : \coqdocvar{Contract}), \coqdocvar{nu} ((\coqdocvar{Failure} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c})//\coqdocvar{s}) = \coqdocvar{false}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{s};\coqdoctac{intros}. \coqdocvar{now} \coqdoctac{simpl}. \coqdoctac{simpl}. \coqdoctac{rewrite} \coqdocvar{o\_false};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{rewrite} \coqdocvar{derive\_plus}. \coqdoctac{simpl}. \coqdocvar{now} \coqdoctac{repeat} \coqdoctac{rewrite} \coqdocvar{IHs}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Rewrite} \coqdocvar{nu\_Failure} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{nu\_Success} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s} : \coqdocvar{Trace})(\coqdocvar{c} : \coqdocvar{Contract}), \coqdocvar{nu} ((\coqdocvar{Success} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c})//\coqdocvar{s}) = \coqdocvar{nu} (\coqdocvar{c}//\coqdocvar{s}).\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{s};\coqdoctac{intros};\coqdoctac{simpl};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{autorewrite} \coqdockw{with} \coqdocvar{icDB} \coqdockw{using} \coqdoctac{simpl};\coqdoctac{auto}. \coqdoctac{rewrite} \coqdocvar{orb\_false\_r}. \coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Hint Rewrite} \coqdocvar{nu\_Failure} \coqdocvar{nu\_Success} : \coqdocvar{icDB}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{nu\_seq\_trace\_derive} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s1} : \coqdocvar{Trace})(\coqdocvar{c0} \coqdocvar{c1} : \coqdocvar{Contract}), \coqdoceol
+\coqdocnoindent
+\coqdocvar{nu} \coqdocvar{c0} = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{nu} (\coqdocvar{c1} // \coqdocvar{s1}) = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{nu} ((\coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_} \coqdocvar{c1}) // \coqdocvar{s1}) = \coqdocvar{true}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{s1};\coqdoctac{intros};\coqdoctac{simpl} \coqdoctac{in} *. \coqdoctac{intuition}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{rewrite} \coqdocvar{o\_true};\coqdoctac{auto}. \coqdoctac{rewrite} \coqdocvar{derive\_plus}. \coqdoctac{simpl}. \coqdoctac{autorewrite} \coqdockw{with} \coqdocvar{icDB}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{rewrite} \coqdocvar{H0}. \coqdocvar{btauto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{matchesb\_seq} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s0} \coqdocvar{s1} : \coqdocvar{Trace})(\coqdocvar{c0} \coqdocvar{c1} : \coqdocvar{Contract}), \coqdocvar{nu} (\coqdocvar{c0}//\coqdocvar{s0}) = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{nu} (\coqdocvar{c1}//\coqdocvar{s1}) = \coqdocvar{true} \ensuremath{\rightarrow} \coqdocvar{nu} ((\coqdocvar{c0} \coqdocvar{\_};\coqdocvar{\_c1}) // (\coqdocvar{s0}++\coqdocvar{s1})) = \coqdocvar{true}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{s0};\coqdoctac{intros};\coqdoctac{simpl} \coqdoctac{in} *.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{rewrite} \coqdocvar{nu\_seq\_trace\_derive}; \coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{autorewrite} \coqdockw{with} \coqdocvar{icDB}. \coqdoctac{simpl}. \coqdoctac{rewrite} \coqdocvar{orb\_true\_iff}. \coqdoctac{right}.\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{rewrite} \coqdocvar{IHs0};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{Matches\_Comp\_i\_matchesb} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract})(\coqdocvar{s} : \coqdocvar{Trace}), \coqdocvar{s} ==\~{} \coqdocvar{c} \ensuremath{\rightarrow} \coqdocvar{nu} (\coqdocvar{c}//\coqdocvar{s}) = \coqdocvar{true}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{induction} \coqdocvar{H};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{simpl}. \coqdocvar{eq\_event\_destruct}. \coqdoctac{reflexivity}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{rewrite} \coqdocvar{matchesb\_seq};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{autorewrite} \coqdockw{with} \coqdocvar{icDB}. \coqdoctac{simpl}. \coqdoctac{intuition}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{autorewrite} \coqdockw{with} \coqdocvar{icDB}. \coqdoctac{simpl}. \coqdoctac{intuition}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{Matches\_Comp\_nil} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract}), \coqdocvar{nu} \coqdocvar{c} = \coqdocvar{true} \ensuremath{\leftrightarrow} [] ==\~{} \coqdocvar{c}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{split};\coqdoctac{intros}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{induction} \coqdocvar{c}; \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H} ; \coqdoctac{try} \coqdoctac{discriminate}; \coqdocvar{autoM}. \coqdoctac{apply} \coqdocvar{orb\_prop} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{destruct} \coqdocvar{H}; \coqdocvar{autoM}.\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{rewrite} \ensuremath{\leftarrow} (\coqdocvar{app\_nil\_l} []); \coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{induction} \coqdocvar{c};\coqdocvar{autoM}; \coqdoctac{inversion} \coqdocvar{H}; \coqdoctac{simpl}; \coqdoctac{intuition}.\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{apply} \coqdocvar{app\_eq\_nil} \coqdoctac{in} \coqdocvar{H1} \coqdockw{as} [\coqdocvar{H1} \coqdocvar{H1'}]. \coqdoctac{subst}. \coqdoctac{intuition}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{Matches\_Comp\_derive} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract})(\coqdocvar{e} : \coqdocvar{EventType})(\coqdocvar{s} : \coqdocvar{Trace}), \coqdocvar{s} ==\~{} \coqdocvar{c} / \coqdocvar{e} \ensuremath{\rightarrow} (\coqdocvar{e}::\coqdocvar{s}) ==\~{} \coqdocvar{c}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{c};\coqdoctac{intros}; \coqdoctac{try} \coqdoctac{solve} [\coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}; \coqdoctac{inversion} \coqdocvar{H}].\coqdoceol
+\coqdocnoindent
+- \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdocvar{eq\_event\_destruct}. \coqdoctac{inversion} \coqdocvar{H}. \coqdoctac{subst}. \coqdocvar{autoM}. \coqdoctac{inversion} \coqdocvar{H}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H}; \coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{inversion} \coqdocvar{H2}. \coqdoctac{subst}. \coqdocvar{o\_destruct}. \coqdoctac{rewrite} \coqdocvar{H0} \coqdoctac{in} *.\coqdoceol
+\coqdocindent{2.00em}
+\coqdoctac{inversion} \coqdocvar{H7}. \coqdoctac{simpl}.\coqdoceol
+\coqdocindent{2.00em}
+\coqdoctac{rewrite} \ensuremath{\leftarrow} (\coqdocvar{app\_nil\_l} (\coqdocvar{e}::\coqdocvar{s2})). \coqdoctac{subst}. \coqdoctac{constructor}.\coqdoceol
+\coqdocindent{2.50em}
+\coqdocvar{now} \coqdoctac{rewrite} \ensuremath{\leftarrow} \coqdocvar{Matches\_Comp\_nil}. \coqdoctac{auto}. \coqdoctac{rewrite} \coqdocvar{H0} \coqdoctac{in} *.\coqdoceol
+\coqdocindent{2.50em}
+\coqdoctac{inversion} \coqdocvar{H7}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{inversion} \coqdocvar{H1}. \coqdoctac{subst}. \coqdoctac{rewrite} \coqdocvar{app\_comm\_cons}.\coqdoceol
+\coqdocindent{2.00em}
+\coqdoctac{auto} \coqdockw{with} \coqdocvar{icDB}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{Matches\_Comp\_iff\_matchesb} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract})(\coqdocvar{s} : \coqdocvar{Trace}), \coqdocvar{s} ==\~{} \coqdocvar{c} \ensuremath{\leftrightarrow} \coqdocvar{nu} (\coqdocvar{c} // \coqdocvar{s}) = \coqdocvar{true}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{split};\coqdoctac{intros}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{unfold} \coqdocvar{matchesb}. \coqdoctac{auto} \coqdockw{using} \coqdocvar{Matches\_Comp\_i\_matchesb}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{generalize} \coqdoctac{dependent} \coqdocvar{c}. \coqdoctac{induction} \coqdocvar{s};\coqdoctac{intros}.\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdocvar{now} \coqdoctac{rewrite} \ensuremath{\leftarrow} \coqdocvar{Matches\_Comp\_nil}.\coqdoceol
+\coqdocindent{1.00em}
+\coqdoctac{auto} \coqdockw{using} \coqdocvar{Matches\_Comp\_derive}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{derive\_spec\_comp} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c} : \coqdocvar{Contract})(\coqdocvar{e} : \coqdocvar{EventType})(\coqdocvar{s} : \coqdocvar{Trace}), \coqdocvar{e}::\coqdocvar{s} ==\~{} \coqdocvar{c} \ensuremath{\leftrightarrow} \coqdocvar{s} ==\~{} \coqdocvar{c} / \coqdocvar{e}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{repeat} \coqdoctac{rewrite} \coqdocvar{Matches\_Comp\_iff\_matchesb}. \coqdoctac{reflexivity}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Fixpoint} \coqdocvar{plus\_fold} (\coqdocvar{l} : \coqdocvar{list} \coqdocvar{Contract}) : \coqdocvar{Contract} :=\coqdoceol
+\coqdocnoindent
+\coqdockw{match} \coqdocvar{l} \coqdockw{with}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} [] \ensuremath{\Rightarrow} \coqdocvar{Failure}\coqdoceol
+\coqdocnoindent
+\ensuremath{|} \coqdocvar{c} ::\coqdocvar{l} \ensuremath{\Rightarrow} \coqdocvar{c} \coqdocvar{\_}+\coqdocvar{\_} (\coqdocvar{plus\_fold} \coqdocvar{l})\coqdoceol
+\coqdocnoindent
+\coqdockw{end}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{plus\_assoc} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{c1} \coqdocvar{c2} \coqdocvar{c3} : \coqdocvar{Contract}), (\coqdockw{\ensuremath{\forall}} \coqdocvar{s}, \coqdocvar{s}==\~{}((\coqdocvar{c1} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c2}) \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c3}) \ensuremath{\leftrightarrow} \coqdocvar{s} ==\~{} (\coqdocvar{c1} \coqdocvar{\_}+\coqdocvar{\_} (\coqdocvar{c2} \coqdocvar{\_}+\coqdocvar{\_} \coqdocvar{c3}))).\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{split};\coqdoctac{intros}. \coqdoctac{inversion} \coqdocvar{H};\coqdocvar{autoM}. \coqdoctac{inversion} \coqdocvar{H2};\coqdocvar{autoM}. \coqdoctac{inversion} \coqdocvar{H};\coqdocvar{autoM}. \coqdoctac{inversion} \coqdocvar{H1};\coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{plus\_fold\_app} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s}:\coqdocvar{Trace})(\coqdocvar{l1} \coqdocvar{l2} : \coqdocvar{list} \coqdocvar{Contract}), \coqdoceol
+\coqdocnoindent
+\coqdocvar{s} ==\~{} \coqdocvar{plus\_fold} (\coqdocvar{l1} ++ \coqdocvar{l2}) \ensuremath{\leftrightarrow} \coqdocvar{s} ==\~{} (\coqdocvar{plus\_fold} \coqdocvar{l1}) \coqdocvar{\_}+\coqdocvar{\_} (\coqdocvar{plus\_fold} \coqdocvar{l2}).\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intro}. \coqdoctac{induction} \coqdocvar{l1}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{intros}. \coqdoctac{split}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{intros}. \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdocvar{autoM}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{intros}. \coqdoctac{simpl}. \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H}. \{  \coqdoctac{inversion} \coqdocvar{H2}. \} \coqdoctac{assumption}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{intros}. \coqdoctac{split}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{intros}. \coqdoctac{simpl} \coqdoctac{in} *. \coqdoctac{inversion} \coqdocvar{H} ; \coqdocvar{autoM}. \coqdoctac{subst}.\coqdoceol
+\coqdocindent{2.00em}
+\coqdoctac{rewrite} \coqdocvar{IHl1} \coqdoctac{in} \coqdocvar{H1}. \coqdoctac{rewrite} \coqdocvar{plus\_assoc}. \coqdoctac{apply} \coqdocvar{MPlusR};\coqdocvar{autoM}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{intros}. \coqdoctac{simpl} \coqdoctac{in} *. \coqdoctac{apply} \coqdocvar{plus\_assoc} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H};\coqdocvar{autoM}.\coqdoceol
+\coqdocindent{2.00em}
+\coqdoctac{apply} \coqdocvar{MPlusR}. \coqdoctac{rewrite} \coqdocvar{IHl1}. \coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{in\_plus\_fold} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{s} : \coqdocvar{Trace})(\coqdocvar{l} : \coqdocvar{list} \coqdocvar{Contract}), \coqdocvar{s} ==\~{} \coqdocvar{plus\_fold} \coqdocvar{l} \ensuremath{\leftrightarrow} \coqdoceol
+\coqdocnoindent
+(\coqdoctac{\ensuremath{\exists}} \coqdocvar{c}, \coqdocvar{In} \coqdocvar{c} \coqdocvar{l} \ensuremath{\land} \coqdocvar{s} ==\~{} \coqdocvar{c}).\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{intros}. \coqdoctac{split}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{induction} \coqdocvar{l}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{intros}. \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{intros}. \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{H}. \coqdoctac{inversion} \coqdocvar{H};\coqdocvar{autoM}.\coqdoceol
+\coqdocindent{2.00em}
+** \coqdoctac{\ensuremath{\exists}} \coqdocvar{a}. \coqdoctac{split}. \coqdoctac{apply} \coqdocvar{in\_eq}. \coqdoctac{assumption}.\coqdoceol
+\coqdocindent{2.00em}
+** \coqdoctac{apply} \coqdocvar{IHl} \coqdoctac{in} \coqdocvar{H1} \coqdockw{as} [\coqdocvar{c'} [\coqdocvar{P1} \coqdocvar{P2}]]. \coqdoctac{\ensuremath{\exists}} \coqdocvar{c'}. \coqdoctac{split} ; \coqdoctac{auto} \coqdockw{using}  \coqdocvar{in\_cons}.\coqdoceol
+\coqdocnoindent
+- \coqdoctac{intros}. \coqdoctac{destruct} \coqdocvar{H} \coqdockw{as} [ \coqdocvar{c'} [\coqdocvar{P1} \coqdocvar{P2}]]. \coqdoctac{induction} \coqdocvar{l}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{destruct} \coqdocvar{P1}.\coqdoceol
+\coqdocindent{1.00em}
+\ensuremath{\times} \coqdoctac{simpl} \coqdoctac{in} \coqdocvar{P1}. \coqdoctac{destruct} \coqdocvar{P1}.\coqdoceol
+\coqdocindent{2.00em}
+** \coqdoctac{subst}. \coqdoctac{simpl}. \coqdocvar{autoM}.\coqdoceol
+\coqdocindent{2.00em}
+** \coqdoctac{simpl}. \coqdocvar{autoM}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\coqdocnoindent
+\coqdockw{Lemma} \coqdocvar{plus\_fold\_derive} : \coqdockw{\ensuremath{\forall}} (\coqdocvar{l} : \coqdocvar{list} \coqdocvar{Contract}) (\coqdocvar{e} : \coqdocvar{EventType}), (\coqdocvar{plus\_fold} \coqdocvar{l}) / \coqdocvar{e} = \coqdocvar{plus\_fold} (\coqdocvar{map} (\coqdockw{fun} \coqdocvar{c} \ensuremath{\Rightarrow} \coqdocvar{c}/\coqdocvar{e}) \coqdocvar{l}).\coqdoceol
+\coqdocnoindent
+\coqdockw{Proof}.\coqdoceol
+\coqdocnoindent
+\coqdoctac{induction} \coqdocvar{l};\coqdoctac{intros};\coqdoctac{simpl};\coqdoctac{auto};\coqdoctac{f\_equal};\coqdoctac{auto}.\coqdoceol
+\coqdocnoindent
+\coqdockw{Qed}.\coqdoceol
+\coqdocemptyline
+\end{coqdoccode}
+\end{document}

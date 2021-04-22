@@ -10,6 +10,7 @@ Require Import Setoid.
 Require Import Init.Tauto btauto.Btauto.
 Require Import Logic.ClassicalFacts.
 
+
 (* Set Implicit Arguments. *)
 
 
@@ -29,12 +30,16 @@ Inductive Contract : Set :=
 | Event : EventType -> Contract
 | CPlus : Contract -> Contract -> Contract
 | CSeq : Contract -> Contract -> Contract
-| Star : Contract -> Contract.
+| Star : Contract -> Contract
+| CPar : Contract -> Contract -> Contract.
 
 Notation "e _._ c" := (CSeq (Event e) c)
                     (at level 51, right associativity).
 
 Notation "c0 _;_ c1"  := (CSeq c0 c1)
+                         (at level 52, left associativity).
+
+Notation "c0 _||_ c1"  := (CPar c0 c1)
                          (at level 52, left associativity).
 
 Notation "c0 _+_ c1"  := (CPlus c0 c1)
@@ -43,7 +48,6 @@ Notation "c0 _+_ c1"  := (CPlus c0 c1)
 Scheme Equality for Contract.
 
 
-(*For a nullary contract c, nu c = true*)
 Fixpoint nu(c:Contract):bool :=
 match c with
 | Success => true
@@ -52,6 +56,7 @@ match c with
 | c0 _;_ c1 => nu c0 && nu c1
 | c0 _+_ c1 => nu c0 || nu c1
 | Star c => true
+| c0 _||_ c1 => nu c0 && nu c1
 end.
 
 Definition o (c : Contract) := if nu c then Success else Failure.
@@ -78,21 +83,19 @@ Qed.
 
 Hint Rewrite o_Failure o_Success o_idempotent : icDB.
 
+Reserved Notation "e \ c" (at level 40, left associativity).
+Fixpoint derive (e:EventType) (c:Contract) :Contract :=
+match c with
+| Success => Failure
+| Failure => Failure
+| Event e' => if (EventType_eq_dec e' e) then Success else Failure
+| c0 _;_ c1 => o c0 _;_ e \ c1 _+_ e \ c0 _;_ c1
+| c0 _+_ c1 => e \ c0 _+_ e \ c1
+| Star c => e \ c _;_ Star c
+| c0 _||_ c1 => e \ c0 _||_ c1 _+_ c0 _||_ e \ c1 
+end
+where "e \ c" := (derive e c).
 
-(*Derivative of contract with respect to an event*)
-Equations derive (c:Contract) (e:EventType) :Contract :=
-derive Success e := Failure;
-derive Failure e := Failure;
-derive (Event e') e := if (EventType_eq_dec e' e) then Success else Failure;
-derive (c0 _;_ c1) e := (o c0) _;_ (derive c1 e) _+_ (derive c0 e) _;_ c1;
-derive (c0 _+_ c1) e := (derive c0 e) _+_ (derive c1 e);
-derive (Star c) e := derive c e _;_ (Star c).
-
-Global Transparent derive.
-
-Notation "c / e" := (derive c e)(at level 40, left associativity).
-
-Search (Failure / _).
 
 Ltac destruct_ctx :=
   repeat match goal with
@@ -106,7 +109,7 @@ Ltac o_destruct :=
          | [ _ : context[ (o ?c)] |- _ ] => destruct (o_or c);destruct_ctx
          end.
 
-Lemma o_derive : forall c e, (o c)/e = Failure.
+Lemma o_derive : forall c e, e \ (o c) = Failure.
 Proof.
 intros. o_destruct. unfold o. rewrite H0. now simpl. unfold o. rewrite H0. now simpl.
 Qed.
@@ -116,7 +119,7 @@ Ltac autoM := auto with icDB.
 
 Inductive Trace_Derive : Contract -> Trace -> Contract -> Prop :=
 | Trace_Derive_Nil c : Trace_Derive c [] c
-| Trace_Derive_Cons c s c' e (H: Trace_Derive (c/e) s c') : Trace_Derive c (e::s) c'. (*rule motivated by constructor being analgous to cons on lists*)
+| Trace_Derive_Cons c s c' e (H: Trace_Derive (e \ c) s c') : Trace_Derive c (e::s) c'. (*rule motivated by constructor being analgous to cons on lists*)
 Hint Constructors Trace_Derive : icDB.
 
 
@@ -126,13 +129,14 @@ intros. induction H;simpl;autoM.
 Qed.
 
 
+Reserved Notation "s \\ c" (at level 42, left associativity).
+Fixpoint trace_derive (s : Trace) (c : Contract)  : Contract :=
+match s with
+| [] => c
+| e::s' => s' \\ (e \ c)
+end
+where "s \\ c" := (trace_derive s c).
 
-Equations trace_derive (c : Contract) (s : Trace) : Contract :=
-trace_derive c [] := c;
-trace_derive c (e::s') := trace_derive (c/e) s'.
-Global Transparent trace_derive.
-
-Notation "c // s" := (trace_derive c s)(at level 42, left associativity).
 
 (*
 Lemma trace_derive_spec : forall (c c' : Contract)(s : Trace), c // s = c' <-> Trace_Derive c s c'.

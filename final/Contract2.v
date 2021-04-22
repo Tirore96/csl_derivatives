@@ -1,3 +1,7 @@
+(** printing "_;_" %;% *)
+(** printing "_+_" %+% *)
+
+
 Require Import Lists.List.
 Require Import FunInd.
 Require Import Bool.Bool.
@@ -28,8 +32,7 @@ Inductive Contract : Set :=
 | Failure : Contract
 | Event : EventType -> Contract
 | CPlus : Contract -> Contract -> Contract
-| CSeq : Contract -> Contract -> Contract
-| Star : Contract -> Contract.
+| CSeq : Contract -> Contract -> Contract.
 
 Notation "e _._ c" := (CSeq (Event e) c)
                     (at level 51, right associativity).
@@ -51,7 +54,6 @@ match c with
 | Event e => false
 | c0 _;_ c1 => nu c0 && nu c1
 | c0 _+_ c1 => nu c0 || nu c1
-| Star c => true
 end.
 
 Definition o (c : Contract) := if nu c then Success else Failure.
@@ -78,21 +80,17 @@ Qed.
 
 Hint Rewrite o_Failure o_Success o_idempotent : icDB.
 
-
+Reserved Notation "e \ c" (at level 40, left associativity).
 (*Derivative of contract with respect to an event*)
-Equations derive (c:Contract) (e:EventType) :Contract :=
-derive Success e := Failure;
-derive Failure e := Failure;
-derive (Event e') e := if (EventType_eq_dec e' e) then Success else Failure;
-derive (c0 _;_ c1) e := (o c0) _;_ (derive c1 e) _+_ (derive c0 e) _;_ c1;
-derive (c0 _+_ c1) e := (derive c0 e) _+_ (derive c1 e);
-derive (Star c) e := derive c e _;_ (Star c).
+Equations derive (e:EventType) (c:Contract) :Contract := {
+e \ Success := Failure;
+e \ Failure := Failure;
+e \ (Event e') := if (EventType_eq_dec e' e) then Success else Failure;
+e \ (c0 _;_ c1) := o c0 _;_ e \ c1 _+_ e \ c0 _;_ c1;
+e \ (c0 _+_ c1) := e \ c0 _+_ e \ c1}
+where "e \ c" := (derive e c).
 
 Global Transparent derive.
-
-Notation "c / e" := (derive c e)(at level 40, left associativity).
-
-Search (Failure / _).
 
 Ltac destruct_ctx :=
   repeat match goal with
@@ -166,11 +164,11 @@ Inductive Matches_Comp : Trace -> Contract -> Prop :=
   | MPlusR c1 s2 c2
                 (H2 : s2 ==~ c2)
               : s2 ==~ (c1 _+_ c2)
-  | MStar0 c 
+ (* | MStar0 c 
               : [] ==~ Star c
   | MStarSeq c s1 s2 (H1: s1 ==~ c) 
                      (H2: s2 ==~ Star c) 
-              : s1 ++ s2 ==~ Star c
+              : s1 ++ s2 ==~ Star c*)
   where "s ==~ c" := (Matches_Comp s c).
 
 Derive Signature for Matches_Comp.
@@ -273,7 +271,7 @@ intros. induction H;auto.
 - rewrite matchesb_seq;auto.
 - autorewrite with icDB. simpl. intuition.
 - autorewrite with icDB. simpl. intuition.
-- destruct s1. now simpl. simpl. rewrite matchesb_seq;auto.
+(* - destruct s1. now simpl. simpl. rewrite matchesb_seq;auto. *)
 Qed.
 
 
@@ -299,7 +297,7 @@ induction c;intros; try solve [simpl in H; inversion H].
      inversion H7.
   * inversion H1. subst. rewrite app_comm_cons. 
     auto with icDB.
-- inversion H. rewrite app_comm_cons. autoM.
+(* - inversion H. rewrite app_comm_cons. autoM. *)
 Qed.
 
 
