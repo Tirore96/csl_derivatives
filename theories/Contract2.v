@@ -317,7 +317,7 @@ split;intros.
 Qed.
 
 
-Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s =~ c <-> s =~ c / e.
+Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s =~ c <-> s =~ e \ c.
 Proof.
 intros. repeat rewrite Matches_Comp_iff_matchesb.  reflexivity.
 Qed.
@@ -377,7 +377,7 @@ intros. split.
     ** simpl. autoIC.
 Qed.
 
-Lemma plus_fold_derive : forall (l : list Contract) (e : EventType), (plus_fold l) / e = plus_fold (map (fun c => c/e) l).
+Lemma plus_fold_derive : forall (l : list Contract) (e : EventType), e \ (plus_fold l) = plus_fold (map (fun c => e \ c) l).
 Proof.
 induction l;intros;simpl;auto;f_equal;auto.
 Qed.

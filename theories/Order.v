@@ -1,4 +1,4 @@
-Require Import CSL.Contract.
+Require Import CSL.Contract2.
 Require Import Lists.List.
 Require Import Sorting.Permutation.
 Require Import Sorting.Mergesort.
@@ -48,7 +48,7 @@ Module TraceOrder <: TotalLeBool.
     match s1, s2 with
     | [],_ => true
     | _,[] => false
-    | a1::s1',a2::s2' => if (eq_event_dec a1 a2) 
+    | a1::s1',a2::s2' => if (EventType_eq_dec a1 a2) 
                            then leb s1' s2' 
                            else leb_event a1 a2
     end.
@@ -59,11 +59,11 @@ Module TraceOrder <: TotalLeBool.
   induction s1.
   - intros. destruct s2 ; try reflexivity. simpl in H. discriminate.
   - intros. destruct s2; simpl in H; try discriminate.
-    destruct (eq_event_dec a e).
-    ** rewrite e0. f_equal. destruct (eq_event_dec e a).
+    destruct (EventType_eq_dec a e).
+    ** rewrite e0. f_equal. destruct (EventType_eq_dec e a).
       *** auto.
       *** symmetry in e0. contradiction.
-    ** destruct (eq_event_dec e a) ; try (symmetry in e0 ; contradiction).
+    ** destruct (EventType_eq_dec e a) ; try (symmetry in e0 ; contradiction).
        apply leb_event_anti_sym in H. contradiction.
   Qed.
 
@@ -71,16 +71,16 @@ Module TraceOrder <: TotalLeBool.
   Proof. unfold Transitive. induction x.
   - intros. reflexivity.
   - intros. destruct y ; destruct z ; try reflexivity ; try (simpl in H ; discriminate).
-    simpl. destruct (eq_event_dec a e0). 
-    * simpl in H. destruct (eq_event_dec a e).
-      ** simpl in H0. subst. destruct (eq_event_dec e0 e0) ; try contradiction.
+    simpl. destruct (EventType_eq_dec a e0). 
+    * simpl in H. destruct (EventType_eq_dec a e).
+      ** simpl in H0. subst. destruct (EventType_eq_dec e0 e0) ; try contradiction.
          eauto.
-      ** simpl in H0. subst. destruct (eq_event_dec e e0).
+      ** simpl in H0. subst. destruct (EventType_eq_dec e e0).
         *** subst. contradiction.
         *** rewrite <- H0 in H. apply leb_event_anti_sym in H. contradiction.
-    * simpl in H. destruct (eq_event_dec a e).
-      ** simpl in H0. subst. destruct (eq_event_dec e e0) ; [ contradiction | assumption ].
-      ** simpl in H0. destruct (eq_event_dec e e0).
+    * simpl in H. destruct (EventType_eq_dec a e).
+      ** simpl in H0. subst. destruct (EventType_eq_dec e e0) ; [ contradiction | assumption ].
+      ** simpl in H0. destruct (EventType_eq_dec e e0).
         *** subst. assumption.
         *** eauto using leb_event_trans.
   Qed.
@@ -92,7 +92,7 @@ Module TraceOrder <: TotalLeBool.
     - intros. simpl. now left.
     - destruct a2.
       * simpl. now right.
-      * simpl. destruct (eq_event_dec a e) ; destruct (eq_event_dec e a) ;
+      * simpl. destruct (EventType_eq_dec a e) ; destruct (EventType_eq_dec e a) ;
                destruct (IHa1 a2) ; auto using leb_event_total || auto using leb_event_total.
   Defined.
 
