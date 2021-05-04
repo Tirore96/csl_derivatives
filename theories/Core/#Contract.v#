@@ -23,8 +23,12 @@ Inductive EventType : Type :=
 
 Scheme Equality for EventType.
 
+Check EventType_eq_dec.
 
-Definition Trace := List.list EventType % type.
+Print sumbool.
+
+
+Definition Trace := list EventType % type.
 
 Inductive Contract : Set :=
 | Success : Contract

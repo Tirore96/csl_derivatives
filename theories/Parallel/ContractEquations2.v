@@ -130,48 +130,51 @@ match c with
 | c0 _;_ c1 => map (fun p => (fst p)++(snd p)) (list_prod (L c0) (L c1))
 end.
 
+Fixpoint L_inv_trace (s : Trace) :=
+match s with
+| [] => Success
+| e::s' => (Event e) _;_ (L_inv_trace s')
+end.
 
-Lemma Matches_member : forall (s : Trace)(c : Contract), s =~ c -> In s (L c). 
+Lemma L_inv_trace_app : forall (l1 l2 : Trace), L_inv_trace l1 _;_ L_inv_trace l2 =R= L_inv_trace (l1++l2).
 Proof.
-intros. induction H ; simpl ; try solve [auto using in_or_app || auto using in_or_app ].
-rewrite in_map_iff. exists (s1,s2). rewrite in_prod_iff. split;auto.
-Qed.
-
-Lemma member_Matches : forall (c : Contract)(s : Trace), In s (L c) -> s =~ c. 
-Proof.
-induction c;intros;simpl in*; try solve [ destruct H;try contradiction; subst; constructor].
-- apply in_app_or in H. destruct H; auto with cDB.
-- rewrite in_map_iff in H. destruct_ctx. destruct x.
-  rewrite in_prod_iff in H0. destruct H0. simpl in H.
-  subst. auto with cDB.
-Qed.
-
-Theorem Matches_iff_member : forall s c, s =~ c <-> In s (L c).
-Proof.
-split; auto using Matches_member,member_Matches.
-Qed.
-
-Lemma Matches_incl : forall (c0 c1 : Contract), (forall (s : Trace), s =~ c0 -> s =~ c1) -> 
-incl (L c0) (L c1).
-Proof.
-intros. unfold incl. intros. rewrite <- Matches_iff_member in *. auto.
-Qed.
-
-Lemma comp_equiv_destruct : forall (c0 c1: Contract),(forall s : Trace, s =~ c0 <-> s =~ c1) <->
-(forall s : Trace, s =~ c0 -> s =~ c1) /\ (forall s : Trace, s =~ c1 -> s =~ c0).
-Proof.
- split ; intros.
-- split;intros; specialize H with s; destruct H; auto.
-- destruct H. split;intros;auto.
+induction l1;intros;simpl; auto_rwd_eqDB.
+rewrite <- IHl1. auto_rwd_eqDB.
 Qed.
 
 
-Theorem Matches_eq_i_incl_and : forall (c0 c1 : Contract), (forall (s : Trace), s =~ c0 <-> s =~ c1) -> 
-incl (L c0) (L c1) /\ incl (L c1) (L c0) .
+
+(*
+Lemma L_inv_trace_embed : forall (s:Trace), s =~ L_inv_trace s.
 Proof.
-intros. apply comp_equiv_destruct in H. destruct H. split; auto using Matches_incl. 
+induction s;simpl;auto with cDB.
+assert (HA: a::s = [a]++s);auto. rewrite HA; auto with cDB.
 Qed.
 
+Lemma L_inv_trace_eq : forall (s1 s0:Trace), s0 =~ L_inv_trace s1 -> s0 = s1.
+Proof.
+induction s1;intros; simpl in H.
+- now inversion H.
+- c_inversion. apply IHs1 in H4.
+  inversion H3. subst. auto. 
+Qed.
+
+Lemma L_inv_trace_embed_iff : forall (s1 s0:Trace), s0 =~ L_inv_trace s1 <-> s0 = s1.
+Proof. 
+split;intros.
+auto using L_inv_trace_eq. subst. apply L_inv_trace_embed.
+Qed.*)
+
+Lemma L_inv_trace_embed_iff : forall (s1 s0:Trace), s0 =~ L_inv_trace s1 <-> s0 = s1.
+Proof. 
+induction s1;intros;simpl.
+- split;intros; c_inversion. subst. constructor.
+- split;intros. c_inversion. inversion H3. 
+  simpl. f_equal. now rewrite <- IHs1.
+  subst. assert (HA: a::s1 = [a]++s1);auto. 
+  specialize IHs1 with s1. rewrite HA. constructor.
+  constructor. now rewrite IHs1.
+Qed.
 
 Fixpoint Σ (l : list Contract) : Contract :=
 match l with
@@ -187,7 +190,7 @@ induction l1;intros;simpl;auto_rwd_eqDB.
 rewrite IHl1. now rewrite c_plus_assoc.
 Qed.
 
-(*Not used in this file, maybe used in decision procedure*)
+
 Lemma in_Σ : forall (l : list Contract)(s : Trace), s =~ Σ l <-> 
 (exists c, In c l /\ s =~ c).
 Proof. 
@@ -229,63 +232,216 @@ rewrite (incl_Σ_idemp H0). apply Σ_app_comm.
 Qed.
 
 
-Fixpoint Π (s : Trace) :=
-match s with
-| [] => Success
-| e::s' => (Event e) _;_ (Π s')
-end.
+Definition L_inv (l : list Trace) := Σ (map L_inv_trace l).
+Hint Unfold L_inv : eqDB.
 
-Lemma Π_app : forall (l1 l2 : Trace), Π l1 _;_ Π l2 =R= Π (l1++l2).
-Proof.
-induction l1;intros;simpl; auto_rwd_eqDB.
-rewrite <- IHl1. auto_rwd_eqDB.
-Qed.
-
-(*
-Definition Π (l : list Trace) := Σ (map Π l).
-Hint Unfold Π : eqDB.*)
-
-
-Lemma Π_distr_aux : forall (ss : list Trace) (s : Trace), Π s _;_ (Σ (map Π ss)) =R=
- Σ (map (fun x => Π (fst x ++ snd x)) (map (fun y : list EventType => (s, y)) ss)).
+Lemma L_inv_trace_seq_L_inv : forall (ss : list Trace) (s : Trace), L_inv_trace s _;_ L_inv ss =R=
+ Σ (map (fun x => L_inv_trace (fst x ++ snd x)) (map (fun y : list EventType => (s, y)) ss)).
 Proof.
 induction ss;intros;simpl;auto_rwd_eqDB.
-apply c_plus_ctx;auto using Π_app.
+unfold L_inv. simpl.
+auto_rwd_eqDB. apply c_plus_ctx;auto using L_inv_trace_app.
 Qed.
 
-
-Lemma Π_distr : forall l0 l1,  Σ (map Π l0) _;_ Σ (map Π l1) =R=
- Σ (map (fun x => Π (fst x ++ snd x)) (list_prod l0 l1)).
+Lemma L_inv_seq_L_inv : forall l0 l1, L_inv l0 _;_ L_inv l1 =R=
+ Σ (map (fun x => L_inv_trace (fst x ++ snd x)) (list_prod l0 l1)).
 Proof.
-induction l0;intros;simpl. auto_rwd_eqDB.
+induction l0;intros;simpl. unfold L_inv. simpl. auto_rwd_eqDB.
 repeat rewrite map_app. rewrite Σ_app. rewrite <- IHl0.
-auto_rwd_eqDB. 
-apply c_plus_ctx; auto using Π_distr_aux with eqDB. 
+unfold L_inv at 1. simpl. auto_rwd_eqDB. 
+apply c_plus_ctx; auto using L_inv_trace_seq_L_inv with eqDB. 
 Qed.
 
-
-
-Theorem Π_L_ceq : forall (c : Contract), Σ (map Π (L c)) =R= c.
+Theorem L_inv_L_ceq : forall (c : Contract), L_inv (L c) =R= c.
 Proof.
-induction c; simpl; try solve [auto_rwd_eqDB].
+induction c; unfold L_inv; simpl; try solve [auto_rwd_eqDB].
 - rewrite map_app. rewrite Σ_app.
   auto using c_plus_ctx. 
 - rewrite map_map.
   rewrite <- IHc1 at 2. rewrite <- IHc2 at 2.
-  symmetry. apply Π_distr.
+  symmetry. apply L_inv_seq_L_inv.
 Qed.
 
+
+(*
+Lemma L_inv_embed : forall (ss:list Trace)(s : Trace), In s ss <-> s =~ L_inv ss.
+Proof.
+intros. unfold L_inv. rewrite in_Σ. setoid_rewrite in_map_iff.
+split;intros.
+- exists (L_inv_trace s). split;auto using L_inv_trace_embed_iff.
+exists s. split;auto. now rewrite L_inv_trace_embed_iff.
+- destruct_ctx. subst. rewrite L_inv_trace_embed_iff in H0.
+  now subst.
+Qed.
+
+Lemma L_inv_L_ceq : forall (c : Contract), L_inv (L c) =R= c.
+Proof.
+intros. unfold L_inv.
+induction c; unfold L_inv; simpl; try solve [auto_rwd_eqDB].
+- rewrite map_app. rewrite Σ_app.
+  auto using c_plus_ctx. 
+- rewrite map_map.
+  rewrite <- IHc1 at 2. rewrite <- IHc2 at 2.
+  symmetry. apply L_inv_seq_L_inv.
+Qed.*)
+
+
+(*
+Lemma L_seq : forall (s0 s1: Trace)(c0 c1 : Contract), In s0 (L c0) -> In s1 (L c1) -> In (s0++s1) (L (c0 _;_ c1)).
+Proof.
+intros. simpl. rewrite in_map_iff. exists (s0,s1). split;auto.
+rewrite in_prod_iff. split;auto. 
+Qed. *)
+
+
+(*
+Lemma L_inv_trace_app : forall (s0 s1 : Trace) (s:Trace), s =~ L_inv_trace (s0 ++ s1) <-> s =~ (L_inv_trace s0) _;_ (L_inv_trace s1).
+Proof.
+induction s0;intros;simpl.
+- now autorewrite with eqDB.
+- split;intros. 
+  * rewrite Matches_seq_assoc. c_inversion.
+    constructor;auto. now rewrite <- IHs0.
+  * rewrite Matches_seq_assoc in H. c_inversion.
+    constructor;auto. rewrite IHs0;auto with cDB.
+Qed.*)
+
+
+
+
+
+(*Ltac unfold_defs := unfold L_inv.*)
+
+
+
+
+
+Lemma comp_equiv_destruct : forall (c0 c1: Contract),(forall s : Trace, s =~ c0 <-> s =~ c1) <->
+(forall s : Trace, s =~ c0 -> s =~ c1) /\ (forall s : Trace, s =~ c1 -> s =~ c0).
+Proof.
+ split ; intros.
+- split;intros; specialize H with s; destruct H; auto.
+- destruct H. split;intros;auto.
+Qed.
+
+Lemma Matches_member : forall (s : Trace)(c : Contract), s =~ c -> In s (L c). 
+Proof.
+intros. induction H ; simpl ; try solve [auto using in_or_app || auto using in_or_app ].
+rewrite in_map_iff. exists (s1,s2). rewrite in_prod_iff. split;auto.
+Qed.
+
+Lemma member_Matches : forall (s : Trace)(c : Contract), In s (L c) -> s =~ c. 
+Proof.
+intros.
+eapply c_eq_soundness. symmetry. eapply L_inv_L_ceq.
+unfold L_inv. rewrite in_Σ.
+exists (L_inv_trace s).
+split;auto. rewrite in_map_iff. exists s;split;auto.
+now rewrite L_inv_trace_embed_iff. (*only need one direction*)
+Qed.
+
+Theorem Matches_iff_member : forall s c, s =~ c <-> In s (L c).
+Proof.
+split; auto using Matches_member,member_Matches.
+Qed.
+
+Lemma Matches_incl : forall (c0 c1 : Contract), (forall (s : Trace), s =~ c0 -> s =~ c1) -> 
+incl (L c0) (L c1).
+Proof.
+intros. unfold incl. intros. auto using Matches_member, member_Matches.
+Qed.
+
+Lemma incl_Matches : forall (c0 c1 : Contract), incl (L c0) (L c1) -> 
+(forall (s : Trace), s =~ c0 -> s =~ c1).
+Proof.
+intros. unfold incl in H. rewrite Matches_iff_member in *. auto.
+Qed.
+
+Theorem Matches_iff_incl : forall (c0 c1 : Contract), (forall (s : Trace), s =~ c0 -> s =~ c1) <-> 
+incl (L c0) (L c1).
+Proof.
+split;eauto using Matches_incl,incl_Matches.
+Qed.
+
+Corollary Matches_eq_iff_incl_and : forall (c0 c1 : Contract), (forall (s : Trace), s =~ c0 <-> s =~ c1) <-> 
+incl (L c0) (L c1) /\ incl (L c1) (L c0) .
+Proof.
+split;intros.
+- repeat rewrite <- Matches_iff_incl. now apply comp_equiv_destruct in H.
+- generalize s. rewrite comp_equiv_destruct. now repeat setoid_rewrite Matches_iff_incl.
+Qed.
 
 
 Lemma c_eq_completeness : forall (c0 c1 : Contract), (forall s : Trace, s =~ c0 <-> s =~ c1) -> c0 =R= c1.
 Proof.
-intros. rewrite <- Π_L_ceq. rewrite <- (Π_L_ceq c1). 
-apply Matches_eq_i_incl_and in H.
+intros. rewrite <- L_inv_L_ceq. rewrite <- (L_inv_L_ceq c1). 
+unfold L_inv. rewrite Matches_eq_iff_incl_and in H.
 destruct H. auto using incl_map, incl_Σ_c_eq.
 Qed.
 
+Print nat.
+
+Check @eq_refl nat 0.
+
+Lemma zero_i_zero : 0 = 0 -> 0 = 0.
+Proof.
+intros. exact H.
+Qed.
+
+Lemma use_imp : 0=0.
+Proof.
+apply zero_i_zero. apply eq_refl.
+Qed.
+
+Lemma plus_minus : forall (n0 n1 : nat), n0 + n1 = n1 + n0.
+Proof.
+induction n0.
+- intros. simpl. induction n1.
+  * reflexivity.
+  * simpl. rewrite <- IHn1. reflexivity. 
+- intros. simpl. rewrite IHn0.  rewrite plus_n_Sm. reflexivity. 
+Qed.
+
+Lemma plus_minus2 : forall (n0 n1 : nat), n0 + n1 = n1 + n0.
+Proof.
+induction n0;intros;simpl.
+- induction n1; try reflexivity.
+  simpl. rewrite <- IHn1. reflexivity. 
+- rewrite IHn0. rewrite plus_n_Sm. reflexivity. 
+Qed.
+
+Lemma plus_minus2 : forall n0 n1, n0 + n1 = n1 + n0.
+Proof.
+induction n0;intros. simpl. auto.
+Show Proof.
+induction n1;simpl;auto. 
+rewrite <- IHn1. auto. 
+Qed.
+
+intros;simpl;auto. simpl.
+
+Definition eq0_def : 0 = 0 := eq_refl.
+
+Lemma eq0_lemma : 0 = 0.
+Proof.
+apply eq_refl.
+Qed.
+
+Print eq0_lemma.
+
+Lemma eq0_auto : 0 = 0.
+Proof.
+auto.
+Qed.
+
+Print eq0_auto.
 
 
+
+: 0 = 0.
+
+
+Check @eq_refl.
 Theorem Matches_iff_c_eq : forall c0 c1, (forall s, s =~ c0 <-> s =~ c1) <-> c0 =R= c1.
 Proof.
 split; auto using c_eq_completeness, c_eq_soundness.
@@ -295,6 +451,19 @@ Lemma L_Σ : forall l, L (Σ l) = flat_map L l.
 Proof.
 induction l;intros;simpl;auto. now rewrite IHl.
 Qed.
+
+Lemma Σ_c_eq_incl : forall (l1 l2 : list Contract), Σ l1 =R= Σ l2 -> incl l1 l2 /\ incl l2 l1.
+Proof.
+intros. rewrite <- Matches_iff_c_eq in H. rewrite Matches_eq_iff_incl_and in H.
+repeat rewrite L_Σ in H.
+destruct H. unfold incl in*.
+- split;intros. setoid_rewrite in_flat_map in H. specialize H with a. 
+
+
+
+
+
+
 
 
 
