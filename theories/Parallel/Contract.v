@@ -14,17 +14,14 @@ Require Import Logic.ClassicalFacts.
 
 Set Implicit Arguments.
 
+Require CSL.Core.Contract.
 
-
-
-Inductive EventType : Type :=
-| Transfer : EventType
-| Notify : EventType.
-
-Scheme Equality for EventType.
-
-
-Definition Trace := List.list EventType % type.
+Module CSLC := CSL.Core.Contract.
+Definition Trace := CSLC.Trace.
+Definition EventType := CSLC.EventType.
+Definition EventType_eq_dec := CSLC.EventType_eq_dec.
+Definition Transfer := CSLC.Transfer.
+Definition Notify := CSLC.Notify.
 
 Inductive Contract : Set :=
 | Success : Contract
@@ -57,7 +54,7 @@ match c with
 | c0 _+_ c1 => nu c0 || nu c1
 | c0 _*_ c1 => nu c0 && nu c1
 end.
-
+(*
 Definition o (c : Contract) := if nu c then Success else Failure.
 Hint Unfold o : core.
 
@@ -78,9 +75,8 @@ Qed.
 Lemma o_idempotent : forall (c : Contract), o (o c) = o c.
 Proof.
 intros. destruct (o_or c). destruct H. rewrite H;auto. destruct H. now rewrite H. 
-Qed.
+Qed.*)
 
-Hint Rewrite o_Failure o_Success o_idempotent : cDB.
 
 Reserved Notation "e \ c" (at level 40, left associativity).
 Fixpoint derive (e:EventType) (c:Contract) :Contract :=
@@ -88,7 +84,9 @@ match c with
 | Success => Failure
 | Failure => Failure
 | Event e' => if (EventType_eq_dec e' e) then Success else Failure
-| c0 _;_ c1 => o c0 _;_ e \ c1 _+_ e \ c0 _;_ c1
+| c0 _;_ c1 => if nu c0 then
+                 ((derive e c0) _;_ c1) _+_ (derive e c1)
+                 else (derive e c0) _;_ c1
 | c0 _+_ c1 => e \ c0 _+_ e \ c1
 | c0 _*_ c1 => (derive e c0) _*_ c1 _+_ c0 _*_ (derive e c1)
 end
@@ -100,21 +98,8 @@ Ltac destruct_ctx :=
          | [ H: exists _, _  |- _ ] => destruct H
          end.
 
-Ltac o_destruct :=
-  match goal with
-         | [ |- context[(o ?c)] ] => destruct (o_or c);destruct_ctx
-         | [ _ : context[ (o ?c)] |- _ ] => let H := fresh "H" in 
-                                            let H1 := fresh "H1" in 
-                                            destruct (o_or c) as [[H H1] | [H H1]];
-                                            rewrite H in*;clear H
-         end.
 
-Lemma o_derive : forall c e, e \ (o c) = Failure.
-Proof.
-intros. o_destruct. unfold o. rewrite H0. now simpl. unfold o. rewrite H0. now simpl.
-Qed.
 
-Hint Rewrite o_idempotent o_derive : cDB.
 Ltac autoIC := auto with cDB.
 
 
@@ -399,22 +384,12 @@ Proof.
 induction s;intros;simpl;auto.
 Qed. 
 
-Lemma o_true : forall (c: Contract), nu c = true -> o c = Success.
-Proof.
-intros. o_destruct;auto with cDB. rewrite H in H1. discriminate. 
-Qed.
-
-Lemma o_false : forall (c: Contract), nu c = false -> o c = Failure.
-Proof.
-intros. o_destruct. rewrite H in H1. discriminate. auto. 
-Qed.
-
 Hint Rewrite derive_distr_plus : cDB.
 
 Lemma nu_seq_derive : forall (e : EventType)(c0 c1 : Contract), 
 nu c0 = true -> nu (e \ c1) = true -> nu (e \ (c0 _;_ c1)) = true.
 Proof.
-intros. simpl. rewrite orb_true_iff. left. rewrite o_true;auto.
+intros. simpl. destruct (nu c0). simpl. auto with bool. discriminate.
 Qed.
 
 (*Not needed*)
@@ -426,8 +401,7 @@ Qed.*)
 
 Lemma nu_Failure : forall (s : Trace)(c : Contract), nu (s \\ (Failure _;_ c)) = false.
 Proof.
-induction s;intros. now simpl. simpl. rewrite o_false;auto.
-rewrite derive_distr_plus. simpl. now repeat rewrite IHs.
+induction s;intros. now simpl. simpl. auto.
 Qed.
 
 Hint Rewrite nu_Failure : cDB.
@@ -435,7 +409,7 @@ Hint Rewrite nu_Failure : cDB.
 Lemma nu_Success : forall (s : Trace)(c : Contract), nu (s \\ (Success _;_ c)) = nu (s \\ c).
 Proof.
 induction s;intros;simpl;auto. 
-autorewrite with cDB using simpl;auto. rewrite orb_false_r. auto. 
+autorewrite with cDB using simpl;auto. 
 Qed.
 
 Hint Rewrite nu_Failure nu_Success : cDB.
@@ -443,18 +417,17 @@ Hint Rewrite nu_Failure nu_Success : cDB.
 Lemma nu_seq_trace_derive : forall (s : Trace)(c0 c1 : Contract), 
 nu c0 = true -> nu (s \\ c1) = true -> nu (s \\ (c0 _;_ c1)) = true.
 Proof.
-induction s;intros;simpl in *. intuition.
-rewrite o_true;auto. rewrite derive_distr_plus. simpl. autorewrite with cDB.
-rewrite H0. btauto.
+induction s;intros;simpl in *. intuition. destruct (nu c0).
+rewrite derive_distr_plus. simpl. auto with bool. discriminate.
 Qed.
 
 Lemma matchesb_seq : forall (s0 s1 : Trace)(c0 c1 : Contract), nu (s0\\c0) = true -> nu (s1\\c1) = true -> nu ((s0++s1)\\(c0 _;_c1)) = true.
 Proof.
 induction s0;intros;simpl in *.
 - rewrite nu_seq_trace_derive; auto. 
-- autorewrite with cDB. simpl. rewrite orb_true_iff. right. 
-  rewrite IHs0;auto.
+- destruct (nu c0); autorewrite with cDB; simpl; auto with bool.
 Qed.
+
 
 Hint Rewrite matchesb_seq : cDB.
 
@@ -513,14 +486,12 @@ Proof.
 induction c;intros; simpl in*; try solve [inversion H].
 - eq_event_destruct. inversion H. subst. autoIC. inversion H.
 - inversion H; autoIC. (*apply IH directly*) 
-- inversion H.
-  * inversion H2. subst. o_destruct. 
-    inversion H7. simpl. 
-    rewrite <- (app_nil_l (e::s2)). constructor.
-    all: auto using Matches_Comp_nil_nu. 
-    inversion H7.
-  * inversion H1. subst. rewrite app_comm_cons. 
-    auto with cDB.
+- destruct (nu c1) eqn:Heqn.
+  * inversion H.
+    ** inversion H2. subst. rewrite app_comm_cons. auto with cDB.
+    ** subst. rewrite <- (app_nil_l (e::s)).
+       auto using Matches_Comp_nil_nu with cDB.
+  * inversion H. subst. rewrite app_comm_cons. auto with cDB.
 - inversion H.
   * inversion H2; subst; eauto with cDB.
   * inversion H1;subst; eauto with cDB. (*New case*)
