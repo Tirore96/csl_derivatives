@@ -122,30 +122,7 @@ intros. induction H; simpl ; try lia.
 - stuck_tac. lia.
 - stuck_tac. destruct o; stuck_tac. lia.
 Defined.
-(*
-Lemma not_stuck_derives : forall (c : Contract), NotStuck c -> (forall (e : EventType), con_size (e \ c ) < con_size c).
-Proof.
-intros. generalize dependent e. induction H;intros;simpl.
-- lia.
-- stuck_tac.
-- apply NotStuck_0lt in H. apply Max.max_case_strong. intros.
-  unfold lt. lia.
-*)
 
-Lemma lt_le_l : forall n0 n1 n2 n3, n0 <= n2 -> n1 < n3 -> n0 + n1 < n2 + n3.
-Proof.
-intros. lia.
-Qed.
-
-Lemma lt_le_r : forall n0 n1 n2 n3, n0 < n2 -> n1 <= n3 -> n0 + n1 < n2 + n3.
-Proof.
-intros. lia.
-Qed.
-
-Lemma S_plus : forall n, S n = 1 + n.
-Proof.
-lia.
-Qed.
 
 Lemma not_stuck_derives : forall (c : Contract), NotStuck c -> (forall (e : EventType), con_size (e \ c) < con_size c).
 Proof.
@@ -216,30 +193,6 @@ intros. induction c.
         **** intros. apply plus_lt_compat_r. auto.
         **** intros. apply plus_lt_compat_l. auto.
 Qed.
-
-(*
-Fixpoint plus_fold (l : list Contract) : Contract :=
-match l with
-| [] => Failure
-| c ::l => c _+_ (plus_fold l)
-end.
-
-Lemma in_plus_fold : forall (s : Trace)(l : list Contract), s ==~ plus_fold l <-> 
-(exists c, In c l /\ s ==~ c).
-Proof.
-intros. split.
-- induction l.
-  * intros. simpl in H. inversion H.
-  * intros. simpl in H. inversion H. 
-    ** exists a. split. apply in_eq. assumption.
-    ** apply IHl in H1 as [c' [P1 P2]]. exists c'. split ; auto using  in_cons.
-- intros. destruct H as [ c' [P1 P2]]. induction l.
-  * destruct P1.
-  * apply in_inv in P1 as [P1 | P1].
-    ** simpl. rewrite P1. auto.
-    ** simpl. auto.
-Qed.*)
-
 
 Lemma Stuck_failure : forall (c : Contract), Stuck c -> (forall s, s =~ c <-> s =~ Failure).
 Proof.
