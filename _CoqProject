@@ -1,1 +1,10 @@
--Q theories CSL
+-R theories/ CSL
+
+theories/Core/Contract.v
+theories/Core/ContractEquations.v
+
+theories/Parallel/Contract.v
+theories/Parallel/ContractEquations.v
+
+theories/Iteration/Contract.v
+theories/Iteration/ContractEquations.v

@@ -301,18 +301,6 @@ Qed.
 
 
 
-Fixpoint plus_norm_event e0 := Σ (map (fun e => (Event e) _;_ (plus_norm_event (e \ Event e0))) alphabet).
-
-
-
-
-
-
-
-
-
-
-
 
 
 
