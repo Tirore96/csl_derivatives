@@ -56,6 +56,8 @@ Ltac c_inversion :=
          | [ H: _ =~ Failure |- _ ] => inversion H
          | [ H: ?s =~ _ _+_ _ |- _ ] => inversion H; clear H
          | [ H: ?s =~ _ _;_ _ |- _ ] => inversion H; clear H
+         | [ H: [?x] =~ Event _ |- _ ] => fail
+         | [ H: ?s =~ Event _ |- _ ] => inversion H; subst
          | [ H: [] =~ Success |- _ ] => fail
          | [ H: _ =~ Success |- _ ] => inversion H; clear H
          end);auto with cDB.
@@ -299,8 +301,7 @@ Qed.
 
 
 
-
-
+Fixpoint plus_norm_event e0 := Σ (map (fun e => (Event e) _;_ (plus_norm_event (e \ Event e0))) alphabet).
 
 
 

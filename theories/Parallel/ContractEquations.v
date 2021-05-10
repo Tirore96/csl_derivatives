@@ -846,18 +846,18 @@ remember (Σ (map (fun a : EventType => Event a _;_ (a \ c1 _*_ Σ (map (fun a0 
 remember (Σ (map (fun a0 : EventType => Event a0 _;_ (Σ (map (fun a1 : EventType => Event a1 _;_ a1 \ c1) alphabet) _*_ a0 \ c2)) alphabet)) as b.
 repeat rewrite c_plus_assoc. rewrite (c_plus_comm a).
 repeat rewrite <- c_plus_assoc.
-rewrite (c_plus_assoc _ b).
+rewrite (c_plus_assoc _ b). rewrite (c_plus_comm ((o _) _*_ _)).
 apply c_plus_ctx.
-  * rewrite c_plus_comm. apply c_plus_ctx.
-    ** destruct (o_destruct c1);rewrite H1.
-      *** auto_rwd_eqDB. apply map_ext_in_R;
-          intros; auto_rwd_eqDB.
-      *** auto_rwd_eqDB. 
-          rewrite (map_ext_in_R _ (fun _ : EventType => Failure)).
-          apply fold_Failure. intros. auto_rwd_eqDB.
+  * apply c_plus_ctx.
     ** destruct (o_destruct c2);rewrite H1.
       *** auto_rwd_eqDB. apply map_ext_in_R.
           intros. auto_rwd_eqDB.
+      *** auto_rwd_eqDB. 
+          rewrite (map_ext_in_R _ (fun _ : EventType => Failure)).
+          apply fold_Failure. intros. auto_rwd_eqDB.
+    ** destruct (o_destruct c1);rewrite H1.
+      *** auto_rwd_eqDB. apply map_ext_in_R;
+          intros; auto_rwd_eqDB.
       *** auto_rwd_eqDB. 
           rewrite (map_ext_in_R _ (fun _ : EventType => Failure)).
           apply fold_Failure. intros. auto_rwd_eqDB.
