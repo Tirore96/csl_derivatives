@@ -360,7 +360,7 @@ Qed.
 
 Hint Rewrite o_plus o_seq o_par : eqDB.
 
-Hint Rewrite o_true o_false : oDB.
+Hint Rewrite o_true o_false : oDB. (*maybe remove*)
 
 
 (******************Translation***************)
