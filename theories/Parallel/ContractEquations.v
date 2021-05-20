@@ -165,10 +165,15 @@ Proof.
   intros. auto with eqDB.
 Qed.
 
+
+
+
 (********************Soundness*****************************)
 Lemma cons_app : forall (A: Type) (a : A)(l : list A), a::l = [a]++l.
 Proof. auto.
 Qed.
+
+
 
 Lemma event_seq : forall s e0 c0 e1 c1, s =~ (Event e0 _;_ c0) _*_ (Event e1 _;_ c1) <-> 
 s =~ Event e0 _;_ (c0 _*_ (Event e1 _;_ c1)) _+_ Event e1 _;_ ((Event e0 _;_ c0) _*_ c1).
@@ -298,60 +303,27 @@ Qed.
 Hint Resolve in_alphabet : eqDB.
 Opaque alphabet.
 
-Fixpoint Σ (l : list Contract) : Contract :=
+Fixpoint Σ (A:Type) (l : list A) (f : A -> Contract) : Contract :=
 match l with
 | [] => Failure
-| c ::l => c _+_ (Σ l)
+| c ::l => f c _+_ (Σ l f)
 end.
 
-(*Maybe not needed*)
-Lemma Σ_app : forall (l1 l2 : list Contract), 
-Σ (l1 ++ l2) =R= (Σ l1) _+_ (Σ l2).
-Proof.
-induction l1;intros;simpl;auto_rwd_eqDB.
-rewrite IHl1. now rewrite c_plus_assoc.
-Qed.
+
+
 
 (*Not used in this file, maybe used in decision procedure*)
-Lemma in_Σ : forall (l : list Contract)(s : Trace), s =~ Σ l <-> 
-(exists c, In c l /\ s =~ c).
+Lemma in_Σ : forall (A:Type)(f : A -> Contract)(l : list A)(s : Trace), s =~ Σ l f <-> 
+(exists c, In c (map f l) /\ s =~ c).
 Proof. 
 induction l;intros;simpl.
 - split;intros. c_inversion. destruct_ctx. contradiction.
-- split;intros. c_inversion. exists a. split;auto.
+- split;intros. c_inversion. exists (f a). split;auto.
   rewrite IHl in H1. destruct_ctx. exists x. split;auto.
   destruct_ctx. inversion H. subst. auto with cDB.
   apply MPlusR. rewrite IHl. exists x. split;auto.
 Qed.
 
-Lemma in_Σ_idemp : forall l c, In c l -> c _+_ Σ l =R= Σ l.
-Proof.
-induction l;intros;simpl; auto_rwd_eqDB.
-simpl in H;contradiction.
-simpl in H. destruct H. subst. all: rewrite <- c_plus_assoc.
-auto_rwd_eqDB. rewrite (c_plus_comm c). rewrite c_plus_assoc. 
-apply c_plus_ctx;auto_rwd_eqDB.
-Qed. 
-
-Lemma incl_Σ_idemp : forall (l1 l2 : list Contract), incl l1 l2 -> Σ l2 =R= Σ (l1++l2).
-Proof. 
-induction l1;intros;simpl;auto_rwd_eqDB.
-apply incl_cons_inv in H as [H0 H1].
-rewrite <- IHl1;auto. now rewrite in_Σ_idemp;auto.
-Qed.
-
-Lemma Σ_app_comm : forall (l1 l2 : list Contract), Σ (l1++l2) =R= Σ (l2++l1).
-Proof.
-induction l1;intros;simpl. now rewrite app_nil_r.
-repeat rewrite Σ_app. rewrite <- c_plus_assoc.
-rewrite c_plus_comm. apply c_plus_ctx;auto_rwd_eqDB.
-Qed.
-
-Lemma incl_Σ_c_eq : forall (l1 l2 : list Contract), incl l1 l2 -> incl l2 l1-> Σ l1 =R= Σ l2.
-Proof.
-intros. rewrite (incl_Σ_idemp H). 
-rewrite (incl_Σ_idemp H0). apply Σ_app_comm.
-Qed.
 
 Definition o c := if nu c then Success else Failure.
 
@@ -445,6 +417,10 @@ Proof.
 intros. induction H ; intro H2; inversion H2.
 all : inversion H2; contradiction.
 Qed.
+
+Print sumbool.
+
+
 
 Fixpoint con_size (c:Contract):nat :=
 match c with
@@ -591,56 +567,72 @@ Qed.
 
 Equations plus_norm (c : Contract) : (Contract) by  wf (con_size c) :=
 plus_norm  c := if stuck_dec c then Failure
-               else (o c) _+_ Σ (map (fun e => (Event e) _;_ (plus_norm (e \ c))) alphabet).
+               else (o c) _+_ Σ alphabet (fun e => (Event e) _;_ (plus_norm (e \ c))).
 
 Next Obligation. auto using not_stuck_derives. Defined.
 
-(*Global Transparent plus_norm.*)
+Global Transparent plus_norm.
+Compute (plus_norm (Event Transfer _;_ Event Notify _*_ Event Notify _;_ Event Transfer)).
 
+Lemma Σ_derive : forall (A:Type)(l : list A)(f : A -> Contract)(e : EventType), e \ (Σ l f) = Σ l (fun c => e \ f c).
+Proof. 
+induction l;auto;simpl;intros;rewrite IHl;auto.
+Qed.
 
 Lemma plus_norm_cons : forall (e:EventType)(s:Trace)(c:Contract),
 (forall (e : EventType) (s : Trace), s =~ e \ c <-> s =~ plus_norm (e \ c)) ->
-e :: s =~ c <-> e :: s =~ Σ (map (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c)) alphabet).
+e :: s =~ c <-> e :: s =~ Σ alphabet (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c)).
 Proof.
 intros. repeat rewrite derive_spec_comp.
-assert (HA: forall (l : list Contract)(e : EventType), e \ (Σ l) = Σ (map (fun c => e \ c) l)).
-{ intros. induction l. - reflexivity. - simpl. f_equal. assumption. } rewrite HA. rewrite in_Σ.
-rewrite map_map. rewrite H. split;intros.
+rewrite Σ_derive. rewrite in_Σ.
+rewrite H. split;intros.
 - exists (Success _;_ (plus_norm (e \ c))). split.
   * rewrite in_map_iff. exists e. split;auto with eqDB. 
     simpl. destruct (EventType_eq_dec e e);[ reflexivity | contradiction ].
   * rewrite <- (app_nil_l s). constructor; auto with cDB.
-- destruct H0 as [c0 [P0 P1]]. rewrite in_map_iff in P0. destruct P0 as [x [P3 P4]]. subst.
-  simpl in P1. destruct (EventType_eq_dec x e).
-  * inversion P1. inversion H3. subst. simpl. assumption.
-  * inversion P1. inversion H3.
+- destruct_ctx. rewrite in_map_iff in H0. destruct_ctx.
+  subst. simpl in H1. destruct (EventType_eq_dec x0 e).
+  * inversion H1. inversion H5. subst. simpl. assumption.
+  * inversion H1. inversion H5.
 Qed.
 
 
-Lemma plus_norm_nil : forall (c : Contract), ~([] =~ Σ (map (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c)) alphabet)).
+
+Lemma plus_norm_nil : forall (c : Contract), ~([] =~ Σ alphabet (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c))).
 Proof.
 intros. intro H. apply in_Σ in H as [c0 [P0 P1]]. apply in_map_iff in P0 as [e [P P3]]. 
 subst. inversion P1. apply app_eq_nil in H0 as [H0 H00]. subst. inversion H1.
 Qed.
- 
+
+
+
+Lemma cons_Success : forall (c : Contract) e s, e::s =~ Success _+_ c <-> e::s =~ c.
+Proof.
+split; intros. inversion H. inversion H2. all: auto with cDB.
+Qed.
+
+Lemma plus_Failure : forall (c : Contract) s, s =~ Failure _+_ c <-> s =~ c.
+Proof.
+intro c. apply c_eq_soundness. auto_rwd_eqDB.
+Qed.
+
 Theorem plus_norm_spec : forall (c : Contract)(s : Trace), s =~ c <-> s =~ plus_norm c.
 Proof.
 intros. funelim (plus_norm c). destruct (stuck_dec c).
 - apply Stuck_failure. assumption.
-- unfold o. destruct (nu c) eqn:Heqn.
-  * destruct s.
-    ** split;intros;auto with cDB. auto using Matches_Comp_nil_nu. 
-    ** assert (HA: forall (c : Contract), e::s =~ Success _+_ c <-> e::s =~ c).
-       { split; intros. inversion H0. inversion H3. assumption. auto with cDB. } rewrite HA.
-       apply plus_norm_cons. auto.
-  * destruct s.
-    ** split;intros.
-      *** rewrite Matches_Comp_iff_matchesb in H0. simpl in H0. 
+- destruct s.
+  * unfold o. destruct (nu c) eqn:Heqn.
+    ** split;intros;auto using Matches_Comp_nil_nu with cDB.
+    ** split;intros. 
+      *** rewrite Matches_Comp_iff_matchesb in H0. simpl in *. 
           rewrite Heqn in H0. discriminate.
-      *** c_inversion. apply plus_norm_nil in H3 as [].
-    ** split;intros. apply MPlusR. rewrite <- plus_norm_cons;auto.
-       c_inversion. rewrite plus_norm_cons;auto. 
+      *** c_inversion. apply plus_norm_nil in H3 as []. 
+  * unfold o. destruct (nu c) eqn:Heqn.
+    ** rewrite cons_Success. auto using plus_norm_cons.
+    ** rewrite plus_Failure. auto using plus_norm_cons.
 Qed.
+
+
 
 (**********plus_norm respects axiomatization *******)
 
@@ -662,7 +654,7 @@ Proof.
 simp plus_norm. stuck_tac;auto_rwd_eqDB. inversion n.
 Qed. 
 
-Lemma Σ_Seq_Failure : forall es, Σ (map (fun e : EventType => Event e _;_ plus_norm Failure) es) =R= Failure.
+Lemma Σ_Seq_Failure : forall es, Σ es (fun e : EventType => Event e _;_ plus_norm Failure) =R= Failure.
 Proof.
 induction es. simpl. reflexivity.
 simpl. rewrite IHes. auto_rwd_eqDB.
@@ -676,18 +668,6 @@ Qed.
 
 Hint Rewrite plus_norm_Failure plus_norm_Success : eqDB.
 
-Lemma map_ext_in_R :
-  forall (A : Type)(f g:A->Contract) l, (forall a, In a l -> f a =R= g a) -> Σ (map f l) =R= Σ (map g l).
-Proof.
-induction l;intros;simpl;auto with eqDB.
-apply c_plus_ctx. apply H. apply in_eq. apply IHl.
-intros. apply H. simpl. now right.
-Qed.
-
-
-
-
-
 Ltac eq_m_left := repeat rewrite c_plus_assoc; apply c_plus_ctx;
                   auto_rwd_eqDB.
 
@@ -695,10 +675,9 @@ Ltac eq_m_right := repeat rewrite <- c_plus_assoc; apply c_plus_ctx;
                   auto_rwd_eqDB.
 
 
-
 Lemma Σ_alphabet_or : forall alphabet0 e ,
- Σ (map (fun a : CSLC.EventType => if EventType_eq_dec e a then Success else Failure) alphabet0) =R= Success /\ In e alphabet0 \/
- Σ (map (fun a : CSLC.EventType => if EventType_eq_dec e a then Success else Failure) alphabet0) =R= Failure /\ ~(In e alphabet0).
+ Σ alphabet0 (fun a : CSLC.EventType => if EventType_eq_dec e a then Success else Failure) =R= Success /\ In e alphabet0 \/
+ Σ alphabet0 (fun a : CSLC.EventType => if EventType_eq_dec e a then Success else Failure) =R= Failure /\ ~(In e alphabet0).
 Proof.
 induction alphabet0;intros.
 - simpl. now right.
@@ -713,27 +692,140 @@ induction alphabet0;intros.
     symmetry in H1. contradiction. contradiction.
 Qed.
 
-(************Summation rules *****)
-Lemma Σ_alphabet : forall e, Σ (map (fun a => if EventType_eq_dec e a then Success else Failure) alphabet) =R= Success.
+(************Summation rules used in showing normalization respects axiomatization*****)
+Lemma Σ_alphabet : forall e, Σ alphabet (fun a => if EventType_eq_dec e a then Success else Failure) =R= Success.
 Proof.
 intros. destruct (Σ_alphabet_or alphabet e).
 - destruct H. auto.
 - destruct H. pose proof (in_alphabet e). contradiction.
 Qed.
 
-Lemma Σ_split_plus : forall (A: Type) l (P P' : A -> Contract),
-Σ (map (fun a : A => P a _+_ P' a) l) =R= Σ (map (fun a : A => P a) l) _+_  Σ (map (fun a : A => P' a) l).
+(*
+Add Parametric Morphism A l : (Σ l) with
+signature (fun f0 f1 => forall (a:A), f0 a =R= f1 a)  ==> c_eq as c_eq_Σ_morphism.
 Proof.
-induction l;intros.
-- simpl. auto_rwd_eqDB.
-- simpl. rewrite c_plus_assoc. rewrite c_plus_assoc. apply c_plus_ctx;auto with eqDB.
-  rewrite (c_plus_comm (Σ _)).
-  rewrite c_plus_assoc. apply c_plus_ctx;auto with eqDB. rewrite IHl.
-  auto_rwd_eqDB.
+induction l;intros; simpl; auto with eqDB.
+Qed.
+*)
+Definition fun_eq (f0 f1 : EventType -> Contract) := (forall a, f0 a =R= f1 a).
+
+Add Parametric Morphism l : (Σ l)  with
+signature fun_eq  ==> c_eq as c_eq_Σ_morphism.
+Proof.
+induction l;intros; simpl; auto with eqDB.
 Qed.
 
+
+
+Notation "f0 =F= f1" := (fun_eq f0 f1)(at level 63).
+
+Check c_eq_Σ_morphism.
+
+Lemma fun_eq_refl : forall f, f =F= f.
+Proof.
+intros. unfold fun_eq. auto with eqDB.
+Qed.
+
+Lemma fun_eq_sym : forall f0 f1,f0 =F= f1 -> f1 =F= f0.
+Proof.
+intros. unfold fun_eq. auto with eqDB.
+Qed.
+
+Lemma fun_eq_trans : forall f0 f1 f2,f0 =F= f1 -> f1 =F= f2 -> f0 =F= f2.
+Proof.
+intros. unfold fun_eq. eauto with eqDB.
+Qed.
+
+Add Parametric Relation : (EventType -> Contract) fun_eq
+  reflexivity proved by fun_eq_refl
+  symmetry proved by fun_eq_sym
+  transitivity proved by fun_eq_trans
+  as fun_Contract_setoid.
+
+
+
+Lemma seq_derive_o : forall e c0 c1, e \ (c0 _;_ c1) =R= e \ c0 _;_ c1 _+_ o (c0) _;_ e \ c1.
+Proof.
+intros;simpl.  destruct (nu c0) eqn:Heqn.
+- destruct (o_destruct c0). rewrite H. auto_rwd_eqDB.
+  unfold o in H. rewrite Heqn in H. discriminate.
+- destruct (o_destruct c0). unfold o in H. rewrite Heqn in H. discriminate.
+  rewrite H. auto_rwd_eqDB.
+Qed.
+
+Lemma seq_derive_o_fun : forall c0 c1, (fun e0 => e0 \ (c0 _;_ c1)) =F= (fun e0 => e0 \ c0 _;_ c1 _+_ o (c0) _;_ e0 \ c1).
+Proof.
+intros. unfold fun_eq.  pose proof seq_derive_o. simpl in *. auto.
+Qed.
+
+
+Hint Rewrite seq_derive_o_fun : funDB.
+
+Definition seq_fun (f0 f1 : EventType -> Contract) := fun a => f0 a _;_ f1 a.
+Notation "f0 _f;f_ f1" := (seq_fun f0 f1)(at level 59).
+
+Lemma to_seq_fun : forall f0 f1, (fun a => f0 a _;_ f1 a) =F= f0 _f;f_ f1.
+Proof.
+intros. unfold seq_fun. reflexivity.
+Qed.
+
+Opaque seq_fun.
+
+Add Parametric Morphism : (seq_fun) with
+signature fun_eq ==> fun_eq ==> fun_eq as fun_eq_seq_morphism.
+Proof.
+intros. repeat rewrite <- to_seq_fun. unfold fun_eq in *. intros. auto with eqDB.
+Qed.
+
+
+Definition plus_fun (f0 f1 : EventType -> Contract) := fun a => f0 a _+_ f1 a.
+
+Notation "f0 _f+f_ f1" := (plus_fun f0 f1)(at level 61).
+Lemma to_plus_fun : forall f0 f1, (fun a => f0 a _+_ f1 a) =F= f0 _f+f_ f1.
+Proof.
+intros. unfold plus_fun. reflexivity.
+Qed.
+
+Opaque plus_fun.
+
+Add Parametric Morphism : (plus_fun) with
+signature fun_eq ==> fun_eq ==> fun_eq as fun_eq_plus_morphism.
+Proof.
+intros. repeat rewrite <- to_plus_fun. unfold fun_eq in *. intros. auto with eqDB.
+Qed.
+
+
+Definition par_fun (f0 f1 : EventType -> Contract) := fun a => f0 a _*_ f1 a.
+Notation "f0 _f*f_ f1" := (par_fun f0 f1)(at level 60).
+Lemma to_par_fun : forall f0 f1, (fun a => f0 a _*_ f1 a) =F= f0 _f*f_ f1.
+Proof.
+intros. unfold par_fun. reflexivity.
+Qed.
+
+Opaque plus_fun.
+
+Add Parametric Morphism : (par_fun) with
+signature fun_eq ==> fun_eq ==> fun_eq as fun_eq_par_morphism.
+Proof.
+intros. repeat rewrite <- to_par_fun. unfold fun_eq in *. intros. auto with eqDB.
+Qed.
+
+Hint Rewrite to_seq_fun to_plus_fun to_par_fun : funDB.
+
+
+
+Lemma Σ_split_plus : forall (A: Type) l (P P' : A -> Contract),
+Σ l (fun a : A => P a _+_ P' a) =R= Σ l (fun a : A => P a) _+_  Σ l (fun a : A => P' a).
+Proof.
+intros.
+induction l;intros.
+- simpl. auto_rwd_eqDB.
+- simpl. rewrite IHl. eq_m_left. rewrite c_plus_comm. eq_m_left.
+Qed.
+
+
 Lemma Σ_factor_seq_r : forall l (P: EventType -> Contract) c,
-Σ (map (fun a  => P a _;_ c) l) =R= Σ (map (fun a  => P a) l) _;_ c.
+Σ l (fun a  => P a _;_ c) =R= Σ l (fun a  => P a) _;_ c.
 Proof.
 induction l;intros.
 - simpl. auto_rwd_eqDB.
@@ -741,7 +833,7 @@ induction l;intros.
 Qed.
 
 Lemma Σ_factor_seq_l : forall l (P: EventType -> Contract) c,
-Σ (map (fun a  => c _;_ P a) l) =R= c _;_ Σ (map (fun a  => P a) l).
+Σ l (fun a  => c _;_ P a) =R= c _;_ Σ l (fun a  => P a).
 Proof.
 induction l;intros.
 - simpl. auto_rwd_eqDB.
@@ -750,8 +842,8 @@ Qed.
 
 
 Lemma Σ_factor_par_l : forall l1 c (P' : EventType -> Contract),
-Σ (map (fun a' : EventType => c _*_ P' a') l1) =R=
-c _*_ Σ (map (fun a0 : EventType => P' a0) l1).
+Σ l1 (fun a' : EventType => c _*_ P' a') =R=
+c _*_ Σ l1 (fun a0 : EventType => P' a0).
 Proof.
 induction l1;intros.
 - simpl. auto_rwd_eqDB.
@@ -759,8 +851,8 @@ induction l1;intros.
 Qed.
 
 Lemma Σ_factor_par_r : forall l1 c (P' : EventType -> Contract),
-Σ (map (fun a0 : EventType => P' a0) l1) _*_ c =R=
-Σ (map (fun a' : EventType => P' a' _*_ c) l1).
+Σ l1 (fun a0 : EventType => P' a0) _*_ c =R=
+Σ l1 (fun a' : EventType => P' a' _*_ c).
 Proof.
 induction l1;intros.
 - simpl. auto_rwd_eqDB.
@@ -768,8 +860,8 @@ induction l1;intros.
 Qed.
 
 Lemma Σ_par_ΣΣ : forall l0 l1 (P0 P1 : EventType -> Contract),
-Σ (map (fun a0  => P0 a0) l0) _*_ Σ (map (fun a1 => P1 a1) l1) =R=
-Σ (map (fun a0  => Σ (map (fun a1  => (P0 a0) _*_ (P1 a1)) l1)) l0).
+Σ l0 (fun a0  => P0 a0) _*_ Σ l1 (fun a1 => P1 a1) =R=
+Σ l0 (fun a0  => Σ l1 (fun a1  => (P0 a0) _*_ (P1 a1))).
 Proof. 
 induction l0;intros.
 - simpl. auto_rwd_eqDB.
@@ -779,8 +871,8 @@ Qed.
 
 
 Lemma ΣΣ_prod_swap : forall l0 l1 (P : EventType -> EventType -> Contract), 
-Σ (map (fun a0 => Σ (map (fun a1 => P a0 a1) l1)) l0)=R=
-Σ (map (fun a0 => Σ (map (fun a1 => P a1 a0) l0)) l1).
+Σ l0 (fun a0 => Σ l1 (fun a1 => P a0 a1)) =R=
+Σ l1 (fun a0 => Σ l0 (fun a1 => P a1 a0)).
 Proof.
 induction l0;intros.
 - simpl. induction l1;intros;simpl;auto with eqDB. rewrite IHl1.
@@ -788,7 +880,7 @@ induction l0;intros.
 - simpl. rewrite Σ_split_plus. eq_m_left.
 Qed.
 
-Lemma fold_Failure : forall l, Σ (map (fun _ : EventType => Failure) l) =R= Failure.
+Lemma fold_Failure : forall l, Σ l (fun _ : EventType => Failure) =R= Failure.
 Proof.
 induction l;intros. simpl. reflexivity.
 simpl. rewrite IHl. autorewrite with eqDB. reflexivity.
@@ -796,101 +888,243 @@ Qed.
 
 Hint Resolve fold_Failure : eqDB.
 
+(*Duplicate some of the rules to the function level*)
+
+Lemma Σ_plus_decomp_fun : forall l f0 f1, Σ l (f0 _f+f_ f1) =R= Σ l f0 _+_  Σ l f1.
+Proof.
+intros. rewrite <- to_plus_fun. apply Σ_split_plus.
+Qed.
+
+Lemma Σ_factor_seq_l_fun : forall l f c, Σ l ((fun _ => c ) _f;f_ f) =R= c _;_ Σ l f.
+Proof.
+intros. rewrite <- to_seq_fun. apply Σ_factor_seq_l.
+Qed.
+
+Lemma Σ_factor_seq_r_fun : forall l f0 c, Σ l (f0 _f;f_ (fun _ => c )) =R= Σ l f0 _;_ c.
+Proof.
+intros. rewrite <- to_seq_fun. apply Σ_factor_seq_r.
+Qed.
 
 
-Ltac rwd_in_map f := rewrite map_ext_in_R ; try instantiate (1:=f);intros; auto_rwd_eqDB.
+(*Rules for rewriting functions*)
+Lemma Σ_distr_l_fun : forall f0 f1 f2, f0  _f;f_ (f1 _f+f_ f2) =F= f0 _f;f_ f1 _f+f_ f0 _f;f_ f2.
+Proof.
+intros. rewrite <- to_plus_fun. rewrite <- to_seq_fun.
+symmetry. repeat rewrite <- to_seq_fun. rewrite <- to_plus_fun.
+unfold fun_eq. intros. auto_rwd_eqDB.
+Qed.
+
+
+Lemma Σ_distr_par_l_fun : forall f0 f1 f2, f0  _f*f_ (f1 _f+f_ f2) =F= f0 _f*f_ f1 _f+f_ f0 _f*f_ f2.
+Proof.
+intros. rewrite <- to_plus_fun. repeat rewrite <- to_par_fun.
+rewrite <- to_plus_fun. unfold fun_eq.  auto with eqDB.
+Qed.
+
+Lemma Σ_distr_par_r_fun : forall f0 f1 f2, (f0 _f+f_ f1)  _f*f_ f2 =F= f0 _f*f_ f2 _f+f_ f1 _f*f_ f2.
+Proof.
+intros. rewrite <- to_plus_fun. repeat rewrite <- to_par_fun.
+rewrite <- to_plus_fun. unfold fun_eq. intros.  rewrite c_par_distr_r. reflexivity.
+Qed.
+
+
+
+
+Lemma Σ_seq_assoc_left_fun : forall f0 f1 f2 , f0 _f;f_ (f1 _f;f_ f2) =F= (f0 _f;f_ f1) _f;f_ f2.
+Proof.
+intros. symmetry. rewrite <- (to_seq_fun f0). rewrite <- to_seq_fun.
+rewrite <- (to_seq_fun f1). rewrite <- to_seq_fun. unfold fun_eq.
+auto with eqDB.
+Qed.
+
+Lemma Σ_seq_assoc_right_fun : forall f0 f1 f2 ,  (f0 _f;f_ f1) _f;f_ f2 =F= f0 _f;f_ (f1 _f;f_ f2).
+Proof.
+intros. symmetry. apply Σ_seq_assoc_left_fun.
+Qed.
+
+Lemma o_seq_comm_fun : forall c f, (f _f;f_ (fun _ : EventType => o c)) =F= (fun _ : EventType => o c) _f;f_ f.
+Proof.
+intros. repeat rewrite <- to_seq_fun. unfold fun_eq.
+intros. destruct (o_destruct c); rewrite H; auto_rwd_eqDB.
+Qed.
+
+
+
+Hint Rewrite Σ_distr_l_fun Σ_plus_decomp_fun Σ_factor_seq_l_fun Σ_factor_seq_r_fun Σ_seq_assoc_left_fun
+             Σ_distr_par_l_fun Σ_distr_par_r_fun : funDB.
+
 
 Lemma derive_unfold_seq : forall c1 c2, 
-o c1 _+_ Σ (map (fun a : EventType => Event a _;_ a \ c1) alphabet) =R= c1 ->
-o c2 _+_ Σ (map (fun a : EventType => Event a _;_ a \ c2) alphabet) =R= c2 -> 
+o c1 _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c1) =R= c1 ->
+o c2 _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c2) =R= c2 -> 
 o (c1 _;_ c2) _+_ 
-Σ (map (fun a : EventType => Event a _;_ a \ (c1 _;_ c2)) alphabet) =R=
+Σ alphabet (fun a : EventType => Event a _;_ a \ (c1 _;_ c2)) =R=
 c1 _;_ c2.
 Proof.
-intros;simpl;auto_rwd_eqDB.
-- destruct (nu c1) eqn:Heqn.
-  * rwd_in_map (fun a => Event a _;_ a \ c1 _;_ c2  _+_  Event a _;_ a \ c2);
-    intros; auto_rwd_eqDB.  rewrite Σ_split_plus.
-    rewrite Σ_factor_seq_r. rewrite <- H at 2.
-    rewrite <- H0 at 2. rewrite <- H0 at 3. auto_rwd_eqDB. eq_m_left.
-    apply o_true in Heqn. rewrite Heqn.
-    auto_rwd_eqDB. rewrite (c_plus_comm (Σ _ _;_ Σ _ )).
-    eq_m_right. 
-  * apply o_false in Heqn. rewrite Heqn in*. autorewrite with eqDB in *.
-    rwd_in_map (fun a => Event a _;_ a \ c1 _;_ c2);
-    intros; auto_rwd_eqDB. rewrite Σ_factor_seq_r. 
-    rewrite H. reflexivity.
+intros. rewrite <- H at 2. rewrite <- H0 at 2. autorewrite with funDB eqDB.
+eq_m_left. rewrite o_seq_comm_fun.
+autorewrite with funDB. rewrite Σ_seq_assoc_right_fun.
+rewrite Σ_factor_seq_l_fun.
+rewrite <- H0 at 1. autorewrite with eqDB funDB.
+rewrite c_plus_assoc.
+rewrite (c_plus_comm (Σ _ _ _;_  Σ _ _)).
+eq_m_right.
 Qed.
+
+Lemma rewrite_in_fun : forall f0 f1, f0 =F= f1 -> (fun a => f0 a) =F= (fun a => f1 a).
+Proof.
+intros. unfold fun_eq in*. auto.
+Qed.
+
+Lemma rewrite_c_in_fun : forall (c c' : Contract) , c =R= c' -> (fun _ : EventType => c) =F= (fun _ : EventType => c').
+Proof.
+intros. unfold fun_eq. intros. auto. 
+Qed.
+
+Lemma fun_neut_r : forall f, f _f*f_ (fun _ => Success) =F= f.
+Proof.
+intros. rewrite <- to_par_fun. unfold fun_eq. intros.
+auto_rwd_eqDB.
+Qed.
+
+Lemma fun_neut_l : forall f, (fun _ => Success) _f*f_ f =F= f.
+Proof.
+intros. rewrite <- to_par_fun. unfold fun_eq. intros.
+auto_rwd_eqDB.
+Qed.
+
+Lemma fun_Failure_r : forall f, f _f*f_ (fun _ => Failure) =F= (fun _ => Failure).
+Proof.
+intros. rewrite <- to_par_fun. unfold fun_eq. intros.
+auto_rwd_eqDB.
+Qed.
+
+Lemma fun_Failure_l : forall f, (fun _ => Failure) _f*f_ f =F= (fun _ => Failure).
+Proof.
+intros. rewrite <- to_par_fun. unfold fun_eq. intros.
+auto_rwd_eqDB.
+Qed.
+
+Hint Rewrite fun_neut_r fun_neut_l fun_Failure_r fun_Failure_l : funDB.
+
+Lemma o_seq_comm_fun3: forall c1 c2, 
+Σ alphabet (Event _f;f_ ((fun a : EventType => a \ c1) _f*f_ (fun _ : EventType => o c2))) =R=
+Σ alphabet (Event _f;f_ ((fun a : EventType => a \ c1))) _*_ o c2. 
+Proof.
+intros. destruct (o_destruct c2);
+rewrite H; autorewrite with funDB eqDB; reflexivity.
+Qed.
+
+Lemma o_seq_comm_fun4: forall c1 c2,
+Σ alphabet (Event _f;f_ ((fun _ : EventType => o c1) _f*f_ (fun a : EventType => a \ c2))) =R=
+o c1 _*_ Σ alphabet (Event _f;f_ (fun a : EventType => a \ c2)).
+Proof.
+intros. destruct (o_destruct c1);
+rewrite H; autorewrite with funDB eqDB; reflexivity.
+Qed.
+
+
+Hint Rewrite to_seq_fun to_plus_fun to_par_fun : funDB.
+
+
+Definition Σ_fun (f : EventType -> EventType -> Contract) := fun a  => Σ alphabet (f a).
+
+Lemma to_Σ_fun : forall f, (fun a : EventType => Σ alphabet (f a)) =F= Σ_fun f.
+Proof.
+intros. unfold Σ_fun. reflexivity.
+Qed.
+
+
+Definition app a (f : EventType -> Contract) := f a.
+
+Lemma to_app : forall f a, f a = app a f.
+Proof.
+intros. unfold app. reflexivity.
+Qed.
+
+Opaque app.
+
+Add Parametric Morphism a : (app a) with
+signature fun_eq ==>  c_eq as afun_eq_par_morphism.
+Proof.
+intros. repeat rewrite <- to_app. unfold fun_eq in *. intros. auto with eqDB.
+Qed.
+
+
+Lemma o_seq_comm_fun_fun : forall c1 c2 a,
+(fun a1 : EventType => (Event _f;f_ (fun a0 : EventType => a0 \ c1)) a _*_ (Event _f;f_ (fun a0 : EventType => a0 \ c2)) a1) =F=
+(fun a1 : EventType => (Event a _;_ a \ c1) _*_ Event a1 _;_ a1 \ c2).
+Proof.
+intros. unfold fun_eq. intros. repeat rewrite to_app.
+repeat rewrite <- to_seq_fun.
+ apply c_par_ctx; now rewrite <- to_app.
+Qed.
+
+Lemma o_seq_comm_fun_fun2 : forall c1 c2 a,
+(fun a1 : EventType => (Event a _;_ a \ c1) _*_ Event a1 _;_ a1 \ c2) =F=
+(fun a1 : EventType => (Event a _;_ (a \ c1 _*_ Event a1 _;_ a1 \ c2))) _f+f_ (fun a1 => Event a1 _;_ (Event a _;_ a \ c1 _*_ a1 \ c2)).
+Proof.
+intros. rewrite <- to_plus_fun. unfold fun_eq. intros.
+auto_rwd_eqDB.
+Qed.
+
+
 
 
 Lemma derive_unfold_par : forall c1 c2, 
-o c1 _+_ Σ (map (fun a : EventType => Event a _;_ a \ c1) alphabet) =R= c1 ->
-o c2 _+_ Σ (map (fun a : EventType => Event a _;_ a \ c2) alphabet) =R= c2 -> 
+o c1 _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c1) =R= c1 ->
+o c2 _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c2) =R= c2 -> 
 o (c1 _*_ c2) _+_ 
-Σ (map (fun a : EventType => Event a _;_ a \ (c1 _*_ c2)) alphabet) =R=
+Σ alphabet (fun a : EventType => Event a _;_ a \ (c1 _*_ c2)) =R=
 c1 _*_ c2.
 Proof.
-intros;simpl;auto_rwd_eqDB.
-rewrite (map_ext_in_R _ (fun a : EventType =>  ((Event a _;_ (a \ c1 _*_ o c2) _+_ Event a _;_ ( a \ c1 _*_Σ (map (fun a : EventType => Event a _;_ a \ c2) alphabet))) 
-_+_ (Event a _;_ (o c1 _*_ a \ c2) _+_ Event a _;_ (Σ (map (fun a : EventType => Event a _;_ a \ c1) alphabet) _*_ a \ c2 )))));
-
-try solve [intros; rewrite <- c_distr_l; rewrite <- c_par_distr_l;  rewrite H0;
-           rewrite <- c_distr_l; rewrite <- c_distr_l;
-           rewrite <- c_par_distr_r; rewrite H; reflexivity].
+intros;simpl.
 rewrite <- H at 2. rewrite <- H0 at 2.
-  auto_rwd_eqDB. repeat rewrite (c_par_comm (_ _+_ _)). auto_rwd_eqDB.
-  rewrite c_plus_assoc. eq_m_left. 
-repeat rewrite Σ_split_plus.
-repeat rewrite <- c_plus_assoc. 
-remember (Σ (map (fun a : EventType => Event a _;_ (a \ c1 _*_ Σ (map (fun a0 : EventType => Event a0 _;_ a0 \ c2) alphabet))) alphabet)) as a.
-remember (Σ (map (fun a0 : EventType => Event a0 _;_ (Σ (map (fun a1 : EventType => Event a1 _;_ a1 \ c1) alphabet) _*_ a0 \ c2)) alphabet)) as b.
-repeat rewrite c_plus_assoc. rewrite (c_plus_comm a).
+rewrite to_seq_fun in *. autorewrite with funDB eqDB.
+eq_m_left.
+rewrite <- (rewrite_c_in_fun H). rewrite <- (rewrite_c_in_fun H0).
+autorewrite with funDB eqDB.
+rewrite o_seq_comm_fun3.
+rewrite o_seq_comm_fun4.
 repeat rewrite <- c_plus_assoc.
-rewrite (c_plus_assoc _ b). rewrite (c_plus_comm ((o _) _*_ _)).
+rewrite (c_plus_comm _ (_ _*_ o c2)) .
+eq_m_left. rewrite (c_plus_comm). 
+eq_m_left. rewrite Σ_par_ΣΣ.
+symmetry. 
+rewrite rewrite_in_fun. 2: { unfold fun_eq. intros. rewrite o_seq_comm_fun_fun.
+                             rewrite o_seq_comm_fun_fun2.
+    rewrite Σ_plus_decomp_fun at 1. eapply c_refl. }
+rewrite Σ_split_plus. rewrite c_plus_comm.
 apply c_plus_ctx.
-  * apply c_plus_ctx.
-    ** destruct (o_destruct c2);rewrite H1.
-      *** auto_rwd_eqDB. apply map_ext_in_R.
-          intros. auto_rwd_eqDB.
-      *** auto_rwd_eqDB. 
-          rewrite (map_ext_in_R _ (fun _ : EventType => Failure)).
-          apply fold_Failure. intros. auto_rwd_eqDB.
-    ** destruct (o_destruct c1);rewrite H1.
-      *** auto_rwd_eqDB. apply map_ext_in_R;
-          intros; auto_rwd_eqDB.
-      *** auto_rwd_eqDB. 
-          rewrite (map_ext_in_R _ (fun _ : EventType => Failure)).
-          apply fold_Failure. intros. auto_rwd_eqDB.
-  * subst. symmetry. rewrite Σ_par_ΣΣ.
-rewrite (map_ext_in_R _ (fun a0 : EventType => Σ (map (fun a1 : EventType => Event a0 _;_ (a0 \ c1 _*_ Event a1 _;_ a1 \ c2)) alphabet)
-                                           _+_ Σ (map (fun a1 : EventType => Event a1 _;_ (Event a0 _;_ a0 \ c1 _*_ a1 \ c2)) alphabet)));
-    intros; auto_rwd_eqDB;
-    try solve [rewrite <- Σ_split_plus; apply map_ext_in_R;
-    intros; auto_rwd_eqDB].
- rewrite Σ_split_plus. rewrite c_plus_comm. apply c_plus_ctx.
-    ** rewrite ΣΣ_prod_swap. apply map_ext_in_R.
-       intros. rewrite Σ_factor_seq_l. apply c_seq_ctx;auto with eqDB.
-       rewrite Σ_factor_par_r. reflexivity.
-    ** apply map_ext_in_R. intros. 
-       rewrite Σ_factor_seq_l. apply c_seq_ctx;auto with eqDB.
-       rewrite Σ_factor_par_l. reflexivity.
+- rewrite ΣΣ_prod_swap. apply c_eq_Σ_morphism.
+ 
+rewrite <- to_par_fun.
+repeat rewrite <- to_seq_fun.
+unfold fun_eq. intros.
+rewrite Σ_factor_seq_l. apply c_seq_ctx. reflexivity.
+repeat rewrite <- Σ_factor_par_r.
+apply c_par_ctx; auto with eqDB.
+- apply c_eq_Σ_morphism. rewrite <- to_par_fun.
+repeat rewrite <- to_seq_fun. unfold fun_eq. intros.
+rewrite Σ_factor_seq_l. apply c_seq_ctx;auto with eqDB. 
+repeat rewrite Σ_factor_par_l.
+apply c_par_ctx; auto with eqDB.
+
 Qed.
 
-
-Lemma derive_unfold : forall c, o c _+_ Σ (map (fun a : EventType => Event a _;_ a \ c) alphabet) =R= c.
+Lemma derive_unfold : forall c, o c _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c) =R= c.
 Proof.
 induction c;intros.
+- unfold o; simpl. autorewrite with funDB eqDB using reflexivity.
+- unfold o. simpl. autorewrite with funDB eqDB. reflexivity. 
+- unfold o;simpl. autorewrite with funDB eqDB.
+  rewrite rewrite_in_fun. 2: { instantiate (1:= (fun _ => Event e) _f;f_ (fun a : EventType => if EventType_eq_dec e a then Success else Failure)).
+  repeat rewrite <- to_seq_fun. unfold fun_eq. intros. eq_event_destruct.
+  subst. reflexivity. auto_rwd_eqDB. }
+  rewrite Σ_factor_seq_l_fun. rewrite Σ_alphabet. auto_rwd_eqDB.
 - simpl;auto_rwd_eqDB.
-- simpl;auto_rwd_eqDB. rwd_in_map (fun (_ : EventType) => Failure).
-- rwd_in_map (fun a => Event e _;_ (if EventType_eq_dec e a then Success else Failure)).
-  * rewrite Σ_factor_seq_l. rewrite Σ_alphabet. auto_rwd_eqDB.
-  * simpl. eq_event_destruct;subst; auto_rwd_eqDB.
-- simpl;auto_rwd_eqDB. rwd_in_map (fun a => Event a _;_ a \ c1  _+_  Event a _;_ a \ c2);
-  intros; auto_rwd_eqDB. rewrite Σ_split_plus. 
-  rewrite <- c_plus_assoc. rewrite (c_plus_comm (o _)).
-rewrite (c_plus_assoc (o _)).
-  rewrite IHc1. rewrite (c_plus_comm _ c1).
-  rewrite c_plus_assoc. rewrite IHc2. auto_rwd_eqDB.
+  rewrite <- IHc1 at 2. rewrite <- IHc2 at 2. autorewrite with funDB eqDB.
+  repeat rewrite <- c_plus_assoc. eq_m_right. eq_m_left.
 - auto using derive_unfold_seq.
 - auto using derive_unfold_par.
 Qed.
@@ -900,90 +1134,45 @@ Lemma plus_norm_c_eq : forall c, plus_norm c =R= c.
 Proof.
 intros. funelim (plus_norm c). stuck_tac.
 - symmetry. auto using Stuck_eq_Failure.
-- rewrite map_ext_in_R. apply derive_unfold.
-  intros. rewrite H at 1;auto. eapply c_refl.
+- rewrite <- (derive_unfold c) at 2. eq_m_left.
+  apply c_eq_Σ_morphism. unfold fun_eq. intros. rewrite H;auto. reflexivity.
 Qed.
 
 
-(**********************Define Sigma normal form and show plus_norm always returns a Sigma normal form*************************************)
-Inductive Atom : Contract -> Prop :=
-| AFailure : Atom Failure
-| ASuccess : Atom Success.
-Hint Constructors Atom : eqDB.
 
-Lemma Atom_i_Sequential : forall c, Atom c -> Sequential c.
-Proof.
-intros. inversion H;auto with eqDB.
-Qed.
 
-Hint Resolve Atom_i_Sequential : eqDB.
-
-Inductive NormalForm : Contract -> Prop :=
-| NFA c (H: Atom c) : NormalForm c
-| NFList c es l (H: Atom c) (H1: forall a, In a l -> NormalForm a) : NormalForm (c _+_ Σ (map (fun x => Event (fst x) _;_ snd x) (combine es l))).
-
-Lemma Sequential_Σ : forall l, (forall c, In c l -> Sequential c) -> Sequential (Σ l).
+Lemma Sequential_Σ : forall (A:Type) (l : list A) f, (forall a, In a l -> Sequential (f a)) -> Sequential (Σ l f).
 Proof.
 induction l;intros; auto with eqDB.
 simpl. constructor. auto using in_eq.
 apply IHl. intros. apply H. simpl. now right. 
 Qed.
 
+(*************Completeness = rewrite to normal form + appeal to CSL_core ***********)
 
-Lemma NormalForm_i_Sequential : forall c, NormalForm c -> Sequential c.
-Proof.
-intros. induction H;auto with eqDB.
-- inversion H;
-  constructor; subst; auto with eqDB;
-  apply Sequential_Σ; intros;
-  rewrite in_map_iff in *; destruct_ctx; subst; try constructor;
-  (try constructor); destruct x; apply in_combine_r in H3; auto.
-Qed.
-
-Lemma NormalForm_trans : forall c, NormalForm c -> exists c', translate_aux c = Some c'.
-Proof.
-intros. apply translate_aux_sequential. auto using NormalForm_i_Sequential.
-Qed.
-
-Lemma decompose_map : 
-forall es c, map (fun e => Event e _;_ plus_norm (e \ c)) es = map (fun x => (Event (fst x) _;_ snd x)) (combine es (map (fun e => plus_norm (e \ c) ) es)).
-Proof.
-induction es;intros.
-- simpl. auto.
-- simpl. rewrite IHes. auto.
-Qed. 
-
-Lemma plus_norm_NormalForm : forall c, NormalForm (plus_norm c).
+Lemma plus_norm_Sequential : forall c, Sequential (plus_norm c).
 Proof.
 intros. funelim (plus_norm c). stuck_tac.
-- constructor. constructor.
-- rewrite decompose_map. erewrite map_ext. eapply NFList.
+- constructor. 
+- constructor. 
   * destruct (o_destruct c); rewrite H0; auto with eqDB.
-  * intros. rewrite in_map_iff in *. destruct_ctx.
-    subst. auto.
-  * intros. simpl. auto.
+  * apply Sequential_Σ. intros. constructor. constructor. auto.
 Qed.
-
-
-
-Lemma sum_decomposition_exists : forall c, exists c', NormalForm c' /\ c =R= c'.
-Proof.
-intros. exists (plus_norm c). split. apply plus_norm_NormalForm. symmetry. apply plus_norm_c_eq.
-Qed.
-
-
-(*************Completeness = rewrite to normal form + appeal to CSL_core ***********)
 
 Lemma c_eq_completeness : forall (c0 c1 : Contract),(forall s : Trace, s =~ c0 <-> s =~ c1) ->  c0 =R= c1.
 Proof.
-intros. destruct (sum_decomposition_exists c0). destruct (sum_decomposition_exists c1). destruct_ctx.
-pose proof c_eq_soundness H3. setoid_rewrite H4 in H. 
-pose proof c_eq_soundness H2. setoid_rewrite H5 in H.
-rewrite H3. rewrite H2.
-apply NormalForm_trans in H0. apply NormalForm_trans in H1. destruct_ctx. 
-eapply c_core. eauto. eauto. apply CSLEQ.c_eq_completeness.
-setoid_rewrite <- translate_aux_spec. eapply H. all: eauto.
+intros. rewrite <- plus_norm_c_eq. rewrite <- (plus_norm_c_eq c1).
+pose proof (plus_norm_Sequential c0). pose proof (plus_norm_Sequential c1).
+apply translate_aux_sequential in H0.
+apply translate_aux_sequential in H1. destruct_ctx.
+pose proof c_eq_soundness (plus_norm_c_eq c0).
+setoid_rewrite <- H2 in H.
+pose proof c_eq_soundness (plus_norm_c_eq c1).
+setoid_rewrite <- H3 in H.
+eapply c_core;eauto. apply CSLEQ.c_eq_completeness.
+setoid_rewrite translate_aux_spec in H; eauto.
 Qed.
+
 
 
 

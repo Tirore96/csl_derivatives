@@ -26,15 +26,6 @@ auto. inversion IN. auto.
 Qed.
 Hint Resolve bisimilarity_gen_mon : paco.
 
-(*
-Lemma Bisimilarity_sym : forall r c0 c1, paco2 bisimilarity_gen r c0 c1->
-paco2 bisimilarity_gen r c1 c0.
-Proof.
-pcofix CIH.
-intros. pfold. punfold H0. inversion H0;subst.
-constructor;auto. intros. right. apply CIH.
-pfold.  eauto.
-*)
 
 Theorem matches_eq_i_bisimilarity : forall c0 c1, (forall s, s=~ c0 <-> s=~c1) -> Bisimilarity c0 c1.
 Proof.
@@ -92,7 +83,6 @@ Definition Σed c := ( Σ (map (fun a : EventType => Event a _;_ a \ c) alphabet
 Notation "Σe\ c" := (Σed c)
                     (at level 30, no associativity).
 
- 
 
 
 Reserved Notation "c0 =R= c1" (at level 63).
@@ -121,23 +111,20 @@ Inductive c_eq : Contract -> Contract -> Prop :=
 
 | c_par_event e0 e1 c0 c1 : Event e0 _;_ c0 _*_ Event e1 _;_ c1 =R= Event e0 _;_ (c0 _*_ (Event e1 _;_ c1)) _+_ Event e1 _;_ ((Event e0 _;_ c0) _*_ c1)
 
-| c_unfold c :  Success _+_ (c _;_ Star c) =R= Star c
-| c_star_plus c :  Star (Success _+_ c) =R= Star c
+| c_unfold c :  Success _+_ (c _;_ Star c) =R= Star c (*New star rule 1*)
+| c_star_plus c :  Star (Success _+_ c) =R= Star c (*New star rule 2*)
 | c_refl c : c =R= c
 | c_sym c0 c1 (H: c0 =R=c1) : c1 =R=c0
 | c_trans c0 c1 c2 (H1 : c0 =R=c1) (H2 : c1 =R=c2) : c0 =R=c2
 | c_plus_ctx c0 c0' c1 c1' (H1 : c0 =R=c0') (H2 : c1 =R=c1') : c0 _+_ c1 =R=c0' _+_ c1'
 | c_seq_ctx c0 c0' c1 c1' (H1 : c0 =R=c0') (H2 : c1 =R=c1') : c0 _;_ c1 =R=c0' _;_ c1'
 | c_par_ctx c0 c0' c1 c1' (H1 : c0 =R=c0') (H2 : c1 =R=c1') : c0 _*_ c1 =R=c0' _*_ c1'
-| c_star_ctx c0 c1 (H : c0 =R=c1) : Star c0 =R= Star c1
+| c_star_ctx c0 c1 (H : c0 =R=c1) : Star c0 =R= Star c1  (*new context rule*)
 | c_co_sum es ps  (H: forall p, In p ps -> co_eq (fst p) (snd p) : Prop) (*Apply coinductive premise here*)
                   : (Σe es (map fst ps)) =R= (Σe es (map snd ps))
-(*| c_co_sum  l0 l1 (H0 : length l0 = length alphabet)
-                  (H1 : length l1 = length alphabet) 
-                  (H2: forall n, co_eq (nth n l0 Failure) (nth n l1 Failure) : Prop) (*Apply coinductive premise here*)
-                  : (Σe alphabet l0) =R= (Σe alphabet l1)*)
  where "c1 =R= c2" := (c_eq c1 c2).
 End axiomatization.
+
 
 Notation "c0 = ( R ) = c1" := (c_eq R c0 c1)(at level 63).
 
@@ -216,6 +203,7 @@ Definition co_eq c0 c1 := paco2 c_eq bot2 c0 c1.
 Notation "c0 =C= c1" := (co_eq c0 c1)(at level 63).
 
 
+
 Lemma c_eq_gen_mon: monotone2 c_eq. 
 Proof.
 unfold monotone2.
@@ -241,10 +229,6 @@ Proof.
 intros. punfold H. punfold H0. inversion H; try solve [inversion H0;subst;pfold; eapply c_trans;eauto].
 all : subst; pfold; eauto with eqDB.
 Qed.
-
-
-
-
 
 
 Add Parametric Relation : Contract (co_eq)
@@ -481,14 +465,15 @@ intros. pfold. punfold H. induction H; try solve [ simpl; auto_rwd_eqDB] .
    rewrite Heqn in H. rewrite Heqn2 in H. discriminate.
   rewrite IHc_eq1. rewrite H0. reflexivity.
 - apply Σederive_eq2;auto. intros. apply H in H0.
-  destruct H0. punfold H0. inversion H0.
+  pclearbot. punfold H0.
+
 Qed.
 
 
 
 Lemma co_eq_soundness : forall (c0 c1 : Contract), c0 =C= c1 -> Bisimilarity c0 c1.
 Proof.
-pcofix CIH.
+pcofix CIH. 
 intros. pfold. constructor.
 - intros. right. apply CIH.  apply co_eq_derive. auto.
 - auto using co_eq_nu.
@@ -756,86 +741,10 @@ rewrite (map_ext_in_R _ (fun a0 : EventType => Σ (map (fun a1 : EventType => Ev
 Qed.
 
 
-
-
-
-(*
-Lemma test : forall c,
-Σe alphabet (map (fun a : EventType => a \ c _;_ Star c) alphabet) =C=
-Σe alphabet
-  (map
-     (fun a : EventType =>
-      a \ c _;_ Star (Σe alphabet (map (fun a0 : EventType => a0 \ c) alphabet))) alphabet).
-Proof.
-*)
-(*
-Lemma Star_decomp : forall c es,
-Σe es (map (fun a : EventType => a \ c _;_ Star c) es) =C=
-Σe es (map (fun a : EventType => a \ c _;_ Star (Σe es (map (fun a0 : EventType => a0 \ c) es))) es).
-Proof.
-intros. pcofix CIH. pfold. apply c_co_sum;auto.
-intros. left. pfold.  pose proof map_nth.
-rewrite Σ_factor_seq_r.
-assert (HA: (forall R, (fun a : EventType => a \ c _;_ Star c) Failure =(R)= Failure)).
-
-*)
-(*
-Lemma test: forall es (P P' : EventType -> Contract) R, 
-Σe es (map fst (map (fun e => (P e,P' e)) es)) =(R)=
-Σe es (map snd (map (fun e => (P e,P' e)) es))
-->
-Σ (map (fun a : EventType => Event a _;_ P a) es) =(R)=
-Σ (map (fun a : EventType => Event a _;_ P' a) es).
-Proof. Admitted.
-(*(H: forall p, In p ps -> co_eq (fst p) (snd p) : Prop)
-(Σe es (map fst ps)) =R= (Σe es (map snd ps))*)*)
-
-
-(*
-Lemma sum_decomp : forall es c,
-Σe es (map fst (map (fun e : EventType => (e \ c _;_ Star (Σ (map (fun a0 : EventType => Event a0 _;_ a0 \ c) es)), e \ c _;_ Star c)) es)) =C=
-Σe es (map snd (map (fun e : EventType => (e \ c _;_ Star (Σ (map (fun a0 : EventType => Event a0 _;_ a0 \ c) es)), e \ c _;_ Star c)) es)).
-Proof.
-pcofix CIH.
-intros. pfold. apply c_co_sum. intros.
-rewrite in_map_iff in H. destruct_ctx.
-destruct p. inversion H. simpl.
-left. pfold. apply c_seq_ctx. reflexivity.
-rewrite <- c_unfold. rewrite <- (c_unfold _ c).
- subst. *)
-
-(*Lemma R_i_C : forall c0 c1 R, c0 =(R)= c1 -> c0 =C= c1.
-Proof.
-intros. induction H; try solve [pfold; auto with eqDB].
-- symmetry. auto.
-- rewrite IHc_eq1. rewrite IHc_eq2. reflexivity.
-- rewrite IHc_eq1. rewrite IHc_eq2. reflexivity.
-- rewrite IHc_eq1. rewrite IHc_eq2. reflexivity.
-- rewrite IHc_eq1. rewrite IHc_eq2. reflexivity.
-- rewrite IHc_eq. reflexivity.
-- pcofix CIH. pfold. apply c_co_sum. intros.
-left. pfold. right.
-apply H. left.
- rewrite IHc_eq2. reflexivity.
- subst. auto.
-eauto with eqDB. pcofix CIH. apply c_co_sum. intros.
-right. eapply CIH. eauto. eauto with eqDB.
- punfold IHc_eq1. right.*)
-
 Lemma seq_failure_r_C : forall c,  c _;_ Failure =C= Failure.
 Proof.
 intros. pfold. auto_rwd_eqDB.
 Qed. 
-(*
-Lemma test4 : forall c, Star c =C= Star (Σe\ c).
-Proof.
-intros.
-intros. pfold. rewrite <- c_unfold. rewrite <- (c_unfold _ (Σe\ c)).
-
-
- rewrite <- (c_star_plus _ (Σe\ c)) .
- Admitted.
-*)
 
 Lemma c_star_plus_C : forall c, Star (Success _+_ c) =C= Star c.
 Proof.
@@ -848,55 +757,7 @@ Proof.
 intros. pfold.   auto_rwd_eqDB.
 Qed.
 Check c_unfold.
-(*
-Lemma derive_unfold : forall c, o c _+_ Σ (map (fun a : EventType => Event a _;_ a \ c) alphabet) =C= c.
-Proof.
-induction c;intros.
-- pfold. unfold o;simpl;auto_rwd_eqDB. rewrite Σ_factor_seq_r. auto_rwd_eqDB.
-- pfold. simpl;auto_rwd_eqDB. rwd_in_map (fun (_ : EventType) => Failure).
-- pfold. rwd_in_map (fun a => Event e _;_ (if EventType_eq_dec e a then Success else Failure)).
-  * rewrite Σ_factor_seq_l. rewrite Σ_alphabet. auto_rwd_eqDB.
-  * simpl. eq_event_destruct;subst; auto_rwd_eqDB.
-- pfold. punfold IHc1. punfold IHc2.
-  simpl;auto_rwd_eqDB. rwd_in_map (fun a => Event a _;_ a \ c1  _+_  Event a _;_ a \ c2);
-  intros; auto_rwd_eqDB. rewrite Σ_split_plus. 
-  rewrite <- c_plus_assoc. rewrite (c_plus_comm _ (o _)).
-rewrite (c_plus_assoc _ (o _)).
-  rewrite IHc1. rewrite (c_plus_comm _ (o c2)).
-  rewrite c_plus_assoc. rewrite IHc2. auto_rwd_eqDB.
-- pfold. punfold IHc1. punfold IHc2. auto using derive_unfold_seq.
-- pfold. punfold IHc1. punfold IHc2. auto using derive_unfold_par.
-- unfold o. simpl.
-rewrite (map_ext_in_R2 _ (fun a : EventType => (Event a _;_ a \ c) _;_ Star c)).
-  2: { intros. pfold. auto_rwd_eqDB. }
-(* rewrite Σ_factor_seq_r_C.*)
- rewrite <- IHc.
-rewrite <- (c_unfold_C (_ _+_ (Σ _))).
-Admitted.*)
-(*
-destruct (o_destruct c).
-  * rewrite H. rewrite H in IHc. rewrite c_star_plus_C.
- rewrite <- (c_unfold _ ((Σ (map (fun a : EventType => Event a _;_ a \ c) alphabet)))). subst.
-destruct (o_destruct c).
-  * rewrite H. rewrite c_star_plus_C. rewrite <- (c_unfold_C (Σ _)).
- rewrite <- (c_unfold _ ((Σ (map (fun a : EventType => Event a _;_ a \ c) alphabet)))). subst.
- rewrite test4.
-   pfold. rewrite <- (c_unfold _ (Σe\ c)). 
-  rewrite Σ_factor_seq_r. eq_m_left. unfold Σed.
-  apply c_seq_ctx. reflexivity.
-  pose proof test4. specialize H with c. punfold H.
-Qed.
- *)
-(*
-Lemma derive_unfold2 : forall c, exists es ls, c =C= o c _+_ Σe es ls.
-Proof. Admitted.*)
 
-(*
-Lemma c_plus_ctx_C : forall c0 c0' c1 c1', c0 =C= c0' -> c1 =C= c1' -> c0 _+_ c1 =C= c0' _+_ c1'.
-Proof.
-intros.
-pfold. punfold H. punfold H0. apply c_plus_ctx;auto.
-Qed.*)
 
 Lemma Σd_to_Σe : forall c es, Σ (map (fun a : EventType => Event a _;_ a \ c) es) = Σe es (map (fun e => e \ c) es).
 Proof. 
