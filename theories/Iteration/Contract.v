@@ -10,7 +10,7 @@ Require Import Setoid.
 Require Import Init.Tauto btauto.Btauto.
 Require Import Logic.ClassicalFacts.
 
-(** printing =~ %$=\sim$% *)
+(** printing (:) %$=\sim$% *)
 
 Set Implicit Arguments.
 
@@ -316,31 +316,31 @@ intros. generalize dependent l3. induction H;intros;simpl;auto with cDB.
 Qed.
 
 
-Reserved Notation "s =~ re" (at level 63).
+Reserved Notation "s (:) re" (at level 63).
 Inductive Matches_Comp : Trace -> Contract -> Prop :=
-  | MSuccess : [] =~ Success
-  | MEvent x : [x] =~ (Event x)
+  | MSuccess : [] (:) Success
+  | MEvent x : [x] (:) (Event x)
   | MSeq s1 c1 s2 c2
-             (H1 : s1 =~ c1)
-             (H2 : s2 =~ c2)
-           : (s1 ++ s2) =~ (c1 _;_ c2)
+             (H1 : s1 (:) c1)
+             (H2 : s2 (:) c2)
+           : (s1 ++ s2) (:) (c1 _;_ c2)
   | MPlusL s1 c1 c2
-                (H1 : s1 =~ c1)
-              : s1 =~ (c1 _+_ c2)
+                (H1 : s1 (:) c1)
+              : s1 (:) (c1 _+_ c2)
   | MPlusR c1 s2 c2
-                (H2 : s2 =~ c2)
-              : s2 =~ (c1 _+_ c2)
+                (H2 : s2 (:) c2)
+              : s2 (:) (c1 _+_ c2)
   | MPar s1 c1 s2 c2 s
-             (H1 : s1 =~ c1)
-             (H2 : s2 =~ c2)
+             (H1 : s1 (:) c1)
+             (H2 : s2 (:) c2)
              (H3 : interleave s1 s2 s)
-           : s =~ (c1 _*_ c2)
+           : s (:) (c1 _*_ c2)
   | MStar0 c 
-              : [] =~ Star c
-  | MStarSeq c s1 s2 (H1: s1 =~ c) 
-                     (H2: s2 =~ Star c) 
-              : s1 ++ s2 =~ Star c
-  where "s =~ c" := (Matches_Comp s c).
+              : [] (:) Star c
+  | MStarSeq c s1 s2 (H1: s1 (:) c) 
+                     (H2: s2 (:) Star c) 
+              : s1 ++ s2 (:) Star c
+  where "s (:) c" := (Matches_Comp s c).
 
 (*Derive Signature for Matches_Comp.*)
 
@@ -352,13 +352,13 @@ Ltac eq_event_destruct :=
          | [ _ : context[EventType_eq_dec ?e ?e0]  |- _ ] => destruct (EventType_eq_dec e e0);try contradiction
          end.
 
-Lemma seq_Success : forall c s, s =~ Success _;_ c <-> s =~ c.
+Lemma seq_Success : forall c s, s (:) Success _;_ c <-> s (:) c.
 Proof.
 split;intros. inversion H. inversion H3. subst. now simpl.
 rewrite <- (app_nil_l s). autoIC.
 Qed. 
 
-Lemma seq_Failure : forall c s, s =~ Failure _;_ c <-> s =~ Failure.
+Lemma seq_Failure : forall c s, s (:) Failure _;_ c <-> s (:) Failure.
 Proof.
 split;intros. inversion H. inversion H3. inversion H.
 Qed.
@@ -449,7 +449,7 @@ Qed.
 Hint Resolve matchesb_par matchesb_seq : cDB.
 
 
-Lemma Matches_Comp_i_matchesb : forall (c : Contract)(s : Trace), s =~ c -> nu (s\\c) = true.
+Lemma Matches_Comp_i_matchesb : forall (c : Contract)(s : Trace), s (:) c -> nu (s\\c) = true.
 Proof.
 intros; induction H; 
 solve [ autorewrite with cDB; simpl; auto with bool 
@@ -459,7 +459,7 @@ Qed.
 
 
 
-Lemma Matches_Comp_nil_nu : forall (c : Contract), nu c = true -> [] =~ c.
+Lemma Matches_Comp_nil_nu : forall (c : Contract), nu c = true -> [] (:) c.
 Proof.
 intros;induction c; simpl in H ; try discriminate; autoIC.
 - apply orb_prop in H. destruct H; autoIC.
@@ -469,7 +469,7 @@ Qed.
 
 
 (*This direction with longer trace on the right because of induction step on trace*)
-Lemma Matches_Comp_derive : forall (c : Contract)(e : EventType)(s : Trace), s =~ e \ c-> (e::s) =~ c.
+Lemma Matches_Comp_derive : forall (c : Contract)(e : EventType)(s : Trace), s (:) e \ c-> (e::s) (:) c.
 Proof.
 induction c;intros; simpl in*; try solve [inversion H].
 - eq_event_destruct. inversion H. subst. autoIC. inversion H.
@@ -489,7 +489,7 @@ Qed.
 
 
 
-Theorem Matches_Comp_iff_matchesb : forall (c : Contract)(s : Trace), s =~ c <-> nu (s \\ c) = true.
+Theorem Matches_Comp_iff_matchesb : forall (c : Contract)(s : Trace), s (:) c <-> nu (s \\ c) = true.
 Proof.
 split;intros.
 - auto using Matches_Comp_i_matchesb.
@@ -498,7 +498,7 @@ split;intros.
   auto using Matches_Comp_derive.
 Qed.
 
-Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s =~ c <-> s =~ e \ c.
+Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s (:) c <-> s (:) e \ c.
 Proof.
 intros. repeat rewrite Matches_Comp_iff_matchesb. now simpl.
 Qed.

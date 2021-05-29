@@ -4,9 +4,6 @@ Require Import micromega.Lia.
 From Equations Require Import Equations.
 Require Import Arith.
 Require Import micromega.Lia.
-(** printing =~ %$=\sim$% *)
-
-(** printing _+_ %$+$% *)
 
 Import ListNotations.
 
@@ -36,7 +33,7 @@ match c with
 | Event e => Some (CSLC.Event e)
 | c0 _+_ c1 => bind (translate_aux c0) (fun c0' => bind (translate_aux c1) (fun c1' => Some (CSLC.CPlus c0' c1')))
 | c0 _;_ c1 => bind (translate_aux c0) (fun c0' => bind (translate_aux c1) (fun c1' => Some (CSLC.CSeq c0' c1')))
-| c0 _*_ c1 => None
+| c0 _||_ c1 => None
 end.
 
 Lemma translate_aux_sequential : forall (c : Contract), Sequential c -> exists c', translate_aux c = Some c'.
@@ -72,20 +69,20 @@ Ltac option_inversion :=
 
 Ltac c_inversion :=
   (repeat match goal with
-         | [ H: _ =~ Failure |- _ ] => inversion H
-         | [ H: ?s =~ _ _+_ _ |- _ ] => inversion H; clear H
-         | [ H: ?s =~ _ _;_ _ |- _ ] => inversion H; clear H
-         | [ H: ?s =~ _ _*_ _ |- _ ] => inversion H; clear H
-         | [ H: [?x] =~ Event _ |- _ ] => fail
-         | [ H: ?s =~ Event _ |- _ ] => inversion H; subst
-         | [ H: [] =~ Success |- _ ] => fail
-         | [ H: _ =~ Success |- _ ] => inversion H; clear H
+         | [ H: _ (:) Failure |- _ ] => inversion H
+         | [ H: ?s (:) _ _+_ _ |- _ ] => inversion H; clear H
+         | [ H: ?s (:) _ _;_ _ |- _ ] => inversion H; clear H
+         | [ H: ?s (:) _ _||_ _ |- _ ] => inversion H; clear H
+         | [ H: [?x] (:) Event _ |- _ ] => fail
+         | [ H: ?s (:) Event _ |- _ ] => inversion H; subst
+         | [ H: [] (:) Success |- _ ] => fail
+         | [ H: _ (:) Success |- _ ] => inversion H; clear H
 
          end); option_inversion; auto with cDB.
 
 Ltac core_inversion := option_inversion;CSLEQ.c_inversion.
 
-Lemma translate_aux_spec : forall (c : Contract)(c' : CSLC.Contract),translate_aux c = Some c' -> (forall s, s =~ c <-> CSLC.Matches_Comp s c').
+Lemma translate_aux_spec : forall (c : Contract)(c' : CSLC.Contract),translate_aux c = Some c' -> (forall s, s (:) c <-> CSLC.Matches_Comp s c').
 Proof.
 split. generalize dependent c'. generalize dependent s.
 - induction c; intros;simpl in*;c_inversion.
@@ -122,20 +119,20 @@ Inductive c_eq : Contract -> Contract -> Prop :=
 | c_distr_l c0 c1 c2 : c0 _;_ (c1 _+_ c2) =R= (c0 _;_ c1) _+_ (c0 _;_ c2)
 | c_distr_r c0 c1 c2 : (c0 _+_ c1) _;_ c2 =R= (c0 _;_ c2) _+_ (c1 _;_ c2)
 
-| c_par_assoc c0 c1 c2 : (c0 _*_ c1) _*_ c2 =R= c0 _*_ (c1 _*_ c2)
-| c_par_neut c : c _*_ Success =R= c 
-| c_par_comm c0 c1: c0 _*_ c1 =R= c1 _*_ c0
-| c_par_failure c : c _*_ Failure =R= Failure   
-| c_par_distr_l c0 c1 c2 : c0 _*_ (c1 _+_ c2) =R= (c0 _*_ c1) _+_ (c0 _*_ c2)
+| c_par_assoc c0 c1 c2 : (c0 _||_ c1) _||_ c2 =R= c0 _||_ (c1 _||_ c2)
+| c_par_neut c : c _||_ Success =R= c 
+| c_par_comm c0 c1: c0 _||_ c1 =R= c1 _||_ c0
+| c_par_failure c : c _||_ Failure =R= Failure   
+| c_par_distr_l c0 c1 c2 : c0 _||_ (c1 _+_ c2) =R= (c0 _||_ c1) _+_ (c0 _||_ c2)
 
-| c_par_event e0 e1 c0 c1 : Event e0 _;_ c0 _*_ Event e1 _;_ c1 =R= Event e0 _;_ (c0 _*_ (Event e1 _;_ c1)) _+_ Event e1 _;_ ((Event e0 _;_ c0) _*_ c1)
+| c_par_event e0 e1 c0 c1 : Event e0 _;_ c0 _||_ Event e1 _;_ c1 =R= Event e0 _;_ (c0 _||_ (Event e1 _;_ c1)) _+_ Event e1 _;_ ((Event e0 _;_ c0) _||_ c1)
 
 | c_refl c : c =R= c
 | c_sym c0 c1 (H: c0 =R= c1) : c1 =R= c0
 | c_trans c0 c1 c2 (H1 : c0 =R= c1) (H2 : c1 =R= c2) : c0 =R= c2
 | c_plus_ctx c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _+_ c1 =R= c0' _+_ c1'
 | c_seq_ctx c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _;_ c1 =R= c0' _;_ c1'
-| c_par_ctx c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _*_ c1 =R= c0' _*_ c1'
+| c_par_ctx c0 c0' c1 c1' (H1 : c0 =R= c0') (H2 : c1 =R= c1') : c0 _||_ c1 =R= c0' _||_ c1'
   where "c1 =R= c2" := (c_eq c1 c2).
 
 
@@ -175,8 +172,8 @@ Qed.
 
 
 
-Lemma event_seq : forall s e0 c0 e1 c1, s =~ (Event e0 _;_ c0) _*_ (Event e1 _;_ c1) <-> 
-s =~ Event e0 _;_ (c0 _*_ (Event e1 _;_ c1)) _+_ Event e1 _;_ ((Event e0 _;_ c0) _*_ c1).
+Lemma event_seq : forall s e0 c0 e1 c1, s (:) (Event e0 _;_ c0) _||_ (Event e1 _;_ c1) <-> 
+s (:) Event e0 _;_ (c0 _||_ (Event e1 _;_ c1)) _+_ Event e1 _;_ ((Event e0 _;_ c0) _||_ c1).
 Proof.
 split;intros.
 - c_inversion. inversion H5;subst. symmetry in H1. apply app_eq_nil in H1.
@@ -193,7 +190,7 @@ split;intros.
     econstructor;eauto. simpl in*;auto with cDB.
 Qed.
 
-Lemma c_eq_soundness : forall (c0 c1 : Contract), c0 =R= c1 -> (forall s : Trace, s =~ c0 <-> s =~ c1).
+Lemma c_eq_soundness : forall (c0 c1 : Contract), c0 =R= c1 -> (forall s : Trace, s (:) c0 <-> s (:) c1).
 Proof.
 intros c0 c1 H. induction H ;intros; try solve [split;intros;c_inversion].
   * repeat rewrite translate_aux_spec;eauto. now apply CSLEQ.c_eq_soundness.
@@ -239,22 +236,22 @@ intros c0 c1 H. induction H ;intros; try solve [split;intros;c_inversion].
 Qed.
 
 
-Lemma Matches_plus_comm : forall c0 c1 s, s =~ c0 _+_ c1 <-> s =~ c1 _+_ c0.
+Lemma Matches_plus_comm : forall c0 c1 s, s (:) c0 _+_ c1 <-> s (:) c1 _+_ c0.
 Proof. auto using c_eq_soundness  with eqDB. Qed.
 
-Lemma Matches_plus_neut_l : forall c s, s =~ Failure _+_ c <-> s =~ c.
+Lemma Matches_plus_neut_l : forall c s, s (:) Failure _+_ c <-> s (:) c.
 Proof. intros. rewrite Matches_plus_comm. auto using c_eq_soundness  with eqDB. Qed.
 
-Lemma Matches_plus_neut_r : forall c s, s =~ c _+_ Failure <-> s =~ c.
+Lemma Matches_plus_neut_r : forall c s, s (:) c _+_ Failure <-> s (:) c.
 Proof. auto using c_eq_soundness  with eqDB. Qed.
 
-Lemma Matches_seq_neut_l : forall c s, s =~ (Success _;_ c) <-> s =~ c.
+Lemma Matches_seq_neut_l : forall c s, s (:) (Success _;_ c) <-> s (:) c.
 Proof. auto using c_eq_soundness  with eqDB. Qed.
 
-Lemma Matches_seq_neut_r : forall c s, s =~ c _;_ Success <-> s =~ c.
+Lemma Matches_seq_neut_r : forall c s, s (:) c _;_ Success <-> s (:) c.
 Proof. auto using c_eq_soundness  with eqDB. Qed.
 
-Lemma Matches_seq_assoc : forall c0 c1 c2 s, s =~ (c0 _;_ c1) _;_ c2  <-> s =~ c0 _;_ (c1 _;_ c2).
+Lemma Matches_seq_assoc : forall c0 c1 c2 s, s (:) (c0 _;_ c1) _;_ c2  <-> s (:) c0 _;_ (c1 _;_ c2).
 Proof. auto using c_eq_soundness  with eqDB. Qed.
 
 Hint Rewrite Matches_plus_neut_l 
@@ -266,15 +263,15 @@ Lemma c_plus_neut_l : forall c, Failure _+_ c =R= c.
 Proof. intros. rewrite c_plus_comm. auto with eqDB.
 Qed.
 
-Lemma c_par_neut_l : forall c, Success _*_ c =R= c.
+Lemma c_par_neut_l : forall c, Success _||_ c =R= c.
 Proof. intros. rewrite c_par_comm. auto with eqDB.
 Qed.
 
-Lemma c_par_failure_l  : forall c, Failure _*_ c =R= Failure.
+Lemma c_par_failure_l  : forall c, Failure _||_ c =R= Failure.
 Proof. intros. rewrite c_par_comm. auto with eqDB.
 Qed.
 
-Lemma c_par_distr_r : forall c0 c1 c2, (c0 _+_ c1) _*_ c2 =R= (c0 _*_ c2) _+_ (c1 _*_ c2).
+Lemma c_par_distr_r : forall c0 c1 c2, (c0 _+_ c1) _||_ c2 =R= (c0 _||_ c2) _+_ (c1 _||_ c2).
 Proof. intros. rewrite c_par_comm. rewrite c_par_distr_l. auto with eqDB.
 Qed.
 
@@ -313,8 +310,8 @@ end.
 
 
 (*Not used in this file, maybe used in decision procedure*)
-Lemma in_Σ : forall (A:Type)(f : A -> Contract)(l : list A)(s : Trace), s =~ Σ l f <-> 
-(exists c, In c (map f l) /\ s =~ c).
+Lemma in_Σ : forall (A:Type)(f : A -> Contract)(l : list A)(s : Trace), s (:) Σ l f <-> 
+(exists c, In c (map f l) /\ s (:) c).
 Proof. 
 induction l;intros;simpl.
 - split;intros. c_inversion. destruct_ctx. contradiction.
@@ -337,7 +334,7 @@ Proof.
 unfold o. intros. simpl. destruct (nu c0);destruct (nu c1);simpl;auto_rwd_eqDB.
 Qed.
 
-Lemma o_par : forall c0 c1, o (c0 _*_ c1) =R= o c0 _*_ o c1.
+Lemma o_par : forall c0 c1, o (c0 _||_ c1) =R= o c0 _||_ o c1.
 Proof.
 unfold o. intros. simpl. destruct (nu c0);destruct (nu c1);simpl;auto_rwd_eqDB.
 Qed.
@@ -369,8 +366,8 @@ Inductive Stuck : Contract -> Prop :=
  | STFailure : Stuck Failure
  | STPLus c0 c1 (H0 : Stuck c0) (H1 : Stuck c1) : Stuck (c0 _+_ c1)
  | STSeq c0 c1 (H0 : Stuck c0) : Stuck (c0 _;_ c1)
- | STParL c0 c1 (H0 : Stuck c0) : Stuck (c0 _*_ c1)
- | STParR c0 c1 (H1 : Stuck c1) : Stuck (c0 _*_ c1).
+ | STParL c0 c1 (H0 : Stuck c0) : Stuck (c0 _||_ c1)
+ | STParR c0 c1 (H1 : Stuck c1) : Stuck (c0 _||_ c1).
 Hint Constructors Stuck : tDB.
 
 Inductive NotStuck : Contract -> Prop :=
@@ -379,7 +376,7 @@ Inductive NotStuck : Contract -> Prop :=
  | NSTPlusL c0 c1 (H0 : NotStuck c0) : NotStuck (c0 _+_ c1)
  | NSTPlusR c0 c1 (H1 : NotStuck c1) : NotStuck (c0 _+_ c1)
  | NSTSeq c0 c1 (H0 : NotStuck c0) : NotStuck (c0 _;_ c1)
- | NSTPar c0 c1 (H0 : NotStuck c0)(H1 : NotStuck c1) : NotStuck (c0 _*_ c1).
+ | NSTPar c0 c1 (H0 : NotStuck c0)(H1 : NotStuck c1) : NotStuck (c0 _||_ c1).
 
 Hint Constructors NotStuck : tDB.
 
@@ -388,7 +385,7 @@ match c with
 | Failure => true
 | c0 _+_ c1 => stuck c0 && stuck c1
 | c0 _;_ _ => stuck c0
-| c0 _*_ c1 => stuck c0 || stuck c1
+| c0 _||_ c1 => stuck c0 || stuck c1
 | _ => false
 end.
 
@@ -429,7 +426,7 @@ match c with
 | Event _ => 2
 | c0 _+_ c1 => max (con_size c0) (con_size c1) 
 | c0 _;_ c1 => if stuck_dec c0 then 0 else (con_size c0) + (con_size c1)
-| c0 _*_ c1 => if  sumbool_or _ _ _ _ (stuck_dec c0) (stuck_dec c1) then 0 else (con_size c0) + (con_size c1)
+| c0 _||_ c1 => if  sumbool_or _ _ _ _ (stuck_dec c0) (stuck_dec c1) then 0 else (con_size c0) + (con_size c1)
 end.
 
 Ltac stuck_tac :=
@@ -550,7 +547,7 @@ intros. induction c.
         **** intros. apply plus_lt_compat_l. auto.
 Qed.
 
-Lemma Stuck_failure : forall (c : Contract), Stuck c -> (forall s, s =~ c <-> s =~ Failure).
+Lemma Stuck_failure : forall (c : Contract), Stuck c -> (forall s, s (:) c <-> s (:) Failure).
 Proof.
 intros. split. 2: { intros. inversion H0. }
 generalize dependent s.  induction c; intros.
@@ -572,7 +569,7 @@ plus_norm  c := if stuck_dec c then Failure
 Next Obligation. auto using not_stuck_derives. Defined.
 
 Global Transparent plus_norm.
-Compute (plus_norm (Event Transfer _;_ Event Notify _*_ Event Notify _;_ Event Transfer)).
+Compute (plus_norm (Event Transfer _;_ Event Notify _||_ Event Notify _;_ Event Transfer)).
 
 Lemma Σ_derive : forall (A:Type)(l : list A)(f : A -> Contract)(e : EventType), e \ (Σ l f) = Σ l (fun c => e \ f c).
 Proof. 
@@ -580,8 +577,8 @@ induction l;auto;simpl;intros;rewrite IHl;auto.
 Qed.
 
 Lemma plus_norm_cons : forall (e:EventType)(s:Trace)(c:Contract),
-(forall (e : EventType) (s : Trace), s =~ e \ c <-> s =~ plus_norm (e \ c)) ->
-e :: s =~ c <-> e :: s =~ Σ alphabet (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c)).
+(forall (e : EventType) (s : Trace), s (:) e \ c <-> s (:) plus_norm (e \ c)) ->
+e :: s (:) c <-> e :: s (:) Σ alphabet (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c)).
 Proof.
 intros. repeat rewrite derive_spec_comp.
 rewrite Σ_derive. rewrite in_Σ.
@@ -598,7 +595,7 @@ Qed.
 
 
 
-Lemma plus_norm_nil : forall (c : Contract), ~([] =~ Σ alphabet (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c))).
+Lemma plus_norm_nil : forall (c : Contract), ~([] (:) Σ alphabet (fun e0 : EventType => Event e0 _;_ plus_norm (e0 \ c))).
 Proof.
 intros. intro H. apply in_Σ in H as [c0 [P0 P1]]. apply in_map_iff in P0 as [e [P P3]]. 
 subst. inversion P1. apply app_eq_nil in H0 as [H0 H00]. subst. inversion H1.
@@ -606,17 +603,17 @@ Qed.
 
 
 
-Lemma cons_Success : forall (c : Contract) e s, e::s =~ Success _+_ c <-> e::s =~ c.
+Lemma cons_Success : forall (c : Contract) e s, e::s (:) Success _+_ c <-> e::s (:) c.
 Proof.
 split; intros. inversion H. inversion H2. all: auto with cDB.
 Qed.
 
-Lemma plus_Failure : forall (c : Contract) s, s =~ Failure _+_ c <-> s =~ c.
+Lemma plus_Failure : forall (c : Contract) s, s (:) Failure _+_ c <-> s (:) c.
 Proof.
 intro c. apply c_eq_soundness. auto_rwd_eqDB.
 Qed.
 
-Theorem plus_norm_spec : forall (c : Contract)(s : Trace), s =~ c <-> s =~ plus_norm c.
+Theorem plus_norm_spec : forall (c : Contract)(s : Trace), s (:) c <-> s (:) plus_norm c.
 Proof.
 intros. funelim (plus_norm c). destruct (stuck_dec c).
 - apply Stuck_failure. assumption.
@@ -795,9 +792,9 @@ intros. repeat rewrite <- to_plus_fun. unfold fun_eq in *. intros. auto with eqD
 Qed.
 
 
-Definition par_fun (f0 f1 : EventType -> Contract) := fun a => f0 a _*_ f1 a.
+Definition par_fun (f0 f1 : EventType -> Contract) := fun a => f0 a _||_ f1 a.
 Notation "f0 _f*f_ f1" := (par_fun f0 f1)(at level 60).
-Lemma to_par_fun : forall f0 f1, (fun a => f0 a _*_ f1 a) =F= f0 _f*f_ f1.
+Lemma to_par_fun : forall f0 f1, (fun a => f0 a _||_ f1 a) =F= f0 _f*f_ f1.
 Proof.
 intros. unfold par_fun. reflexivity.
 Qed.
@@ -842,8 +839,8 @@ Qed.
 
 
 Lemma Σ_factor_par_l : forall l1 c (P' : EventType -> Contract),
-Σ l1 (fun a' : EventType => c _*_ P' a') =R=
-c _*_ Σ l1 (fun a0 : EventType => P' a0).
+Σ l1 (fun a' : EventType => c _||_ P' a') =R=
+c _||_ Σ l1 (fun a0 : EventType => P' a0).
 Proof.
 induction l1;intros.
 - simpl. auto_rwd_eqDB.
@@ -851,8 +848,8 @@ induction l1;intros.
 Qed.
 
 Lemma Σ_factor_par_r : forall l1 c (P' : EventType -> Contract),
-Σ l1 (fun a0 : EventType => P' a0) _*_ c =R=
-Σ l1 (fun a' : EventType => P' a' _*_ c).
+Σ l1 (fun a0 : EventType => P' a0) _||_ c =R=
+Σ l1 (fun a' : EventType => P' a' _||_ c).
 Proof.
 induction l1;intros.
 - simpl. auto_rwd_eqDB.
@@ -860,8 +857,8 @@ induction l1;intros.
 Qed.
 
 Lemma Σ_par_ΣΣ : forall l0 l1 (P0 P1 : EventType -> Contract),
-Σ l0 (fun a0  => P0 a0) _*_ Σ l1 (fun a1 => P1 a1) =R=
-Σ l0 (fun a0  => Σ l1 (fun a1  => (P0 a0) _*_ (P1 a1))).
+Σ l0 (fun a0  => P0 a0) _||_ Σ l1 (fun a1 => P1 a1) =R=
+Σ l0 (fun a0  => Σ l1 (fun a1  => (P0 a0) _||_ (P1 a1))).
 Proof. 
 induction l0;intros.
 - simpl. auto_rwd_eqDB.
@@ -951,7 +948,7 @@ Qed.
 
 
 Hint Rewrite Σ_distr_l_fun Σ_plus_decomp_fun Σ_factor_seq_l_fun Σ_factor_seq_r_fun Σ_seq_assoc_left_fun
-             Σ_distr_par_l_fun Σ_distr_par_r_fun : funDB.
+             Σ_distr_par_l_fun Σ_distr_par_r_fun o_seq_comm_fun : funDB.
 
 
 Lemma derive_unfold_seq : forall c1 c2, 
@@ -961,11 +958,12 @@ o (c1 _;_ c2) _+_
 Σ alphabet (fun a : EventType => Event a _;_ a \ (c1 _;_ c2)) =R=
 c1 _;_ c2.
 Proof.
-intros. rewrite <- H at 2. rewrite <- H0 at 2. autorewrite with funDB eqDB.
-eq_m_left. rewrite o_seq_comm_fun.
-autorewrite with funDB. rewrite Σ_seq_assoc_right_fun.
-rewrite Σ_factor_seq_l_fun.
-rewrite <- H0 at 1. autorewrite with eqDB funDB.
+intros. rewrite <- H at 2. rewrite <- H0 at 2.
+autorewrite with funDB eqDB.
+eq_m_left. 
+rewrite Σ_seq_assoc_right_fun. rewrite Σ_factor_seq_l_fun.
+rewrite <- H0 at 1.
+autorewrite with eqDB funDB.
 rewrite c_plus_assoc.
 rewrite (c_plus_comm (Σ _ _ _;_  Σ _ _)).
 eq_m_right.
@@ -1009,7 +1007,7 @@ Hint Rewrite fun_neut_r fun_neut_l fun_Failure_r fun_Failure_l : funDB.
 
 Lemma o_seq_comm_fun3: forall c1 c2, 
 Σ alphabet (Event _f;f_ ((fun a : EventType => a \ c1) _f*f_ (fun _ : EventType => o c2))) =R=
-Σ alphabet (Event _f;f_ ((fun a : EventType => a \ c1))) _*_ o c2. 
+Σ alphabet (Event _f;f_ ((fun a : EventType => a \ c1))) _||_ o c2. 
 Proof.
 intros. destruct (o_destruct c2);
 rewrite H; autorewrite with funDB eqDB; reflexivity.
@@ -1017,7 +1015,7 @@ Qed.
 
 Lemma o_seq_comm_fun4: forall c1 c2,
 Σ alphabet (Event _f;f_ ((fun _ : EventType => o c1) _f*f_ (fun a : EventType => a \ c2))) =R=
-o c1 _*_ Σ alphabet (Event _f;f_ (fun a : EventType => a \ c2)).
+o c1 _||_ Σ alphabet (Event _f;f_ (fun a : EventType => a \ c2)).
 Proof.
 intros. destruct (o_destruct c1);
 rewrite H; autorewrite with funDB eqDB; reflexivity.
@@ -1052,8 +1050,8 @@ Qed.
 
 
 Lemma o_seq_comm_fun_fun : forall c1 c2 a,
-(fun a1 : EventType => (Event _f;f_ (fun a0 : EventType => a0 \ c1)) a _*_ (Event _f;f_ (fun a0 : EventType => a0 \ c2)) a1) =F=
-(fun a1 : EventType => (Event a _;_ a \ c1) _*_ Event a1 _;_ a1 \ c2).
+(fun a1 : EventType => (Event _f;f_ (fun a0 : EventType => a0 \ c1)) a _||_ (Event _f;f_ (fun a0 : EventType => a0 \ c2)) a1) =F=
+(fun a1 : EventType => (Event a _;_ a \ c1) _||_ Event a1 _;_ a1 \ c2).
 Proof.
 intros. unfold fun_eq. intros. repeat rewrite to_app.
 repeat rewrite <- to_seq_fun.
@@ -1061,8 +1059,8 @@ repeat rewrite <- to_seq_fun.
 Qed.
 
 Lemma o_seq_comm_fun_fun2 : forall c1 c2 a,
-(fun a1 : EventType => (Event a _;_ a \ c1) _*_ Event a1 _;_ a1 \ c2) =F=
-(fun a1 : EventType => (Event a _;_ (a \ c1 _*_ Event a1 _;_ a1 \ c2))) _f+f_ (fun a1 => Event a1 _;_ (Event a _;_ a \ c1 _*_ a1 \ c2)).
+(fun a1 : EventType => (Event a _;_ a \ c1) _||_ Event a1 _;_ a1 \ c2) =F=
+(fun a1 : EventType => (Event a _;_ (a \ c1 _||_ Event a1 _;_ a1 \ c2))) _f+f_ (fun a1 => Event a1 _;_ (Event a _;_ a \ c1 _||_ a1 \ c2)).
 Proof.
 intros. rewrite <- to_plus_fun. unfold fun_eq. intros.
 auto_rwd_eqDB.
@@ -1074,9 +1072,9 @@ Qed.
 Lemma derive_unfold_par : forall c1 c2, 
 o c1 _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c1) =R= c1 ->
 o c2 _+_ Σ alphabet (fun a : EventType => Event a _;_ a \ c2) =R= c2 -> 
-o (c1 _*_ c2) _+_ 
-Σ alphabet (fun a : EventType => Event a _;_ a \ (c1 _*_ c2)) =R=
-c1 _*_ c2.
+o (c1 _||_ c2) _+_ 
+Σ alphabet (fun a : EventType => Event a _;_ a \ (c1 _||_ c2)) =R=
+c1 _||_ c2.
 Proof.
 intros;simpl.
 rewrite <- H at 2. rewrite <- H0 at 2.
@@ -1087,7 +1085,7 @@ autorewrite with funDB eqDB.
 rewrite o_seq_comm_fun3.
 rewrite o_seq_comm_fun4.
 repeat rewrite <- c_plus_assoc.
-rewrite (c_plus_comm _ (_ _*_ o c2)) .
+rewrite (c_plus_comm _ (_ _||_ o c2)) .
 eq_m_left. rewrite (c_plus_comm). 
 eq_m_left. rewrite Σ_par_ΣΣ.
 symmetry. 
@@ -1159,7 +1157,7 @@ intros. funelim (plus_norm c). stuck_tac.
   * apply Sequential_Σ. intros. constructor. constructor. auto.
 Qed.
 
-Lemma c_eq_completeness : forall (c0 c1 : Contract),(forall s : Trace, s =~ c0 <-> s =~ c1) ->  c0 =R= c1.
+Lemma c_eq_completeness : forall (c0 c1 : Contract),(forall s : Trace, s (:) c0 <-> s (:) c1) ->  c0 =R= c1.
 Proof.
 intros. rewrite <- plus_norm_c_eq. rewrite <- (plus_norm_c_eq c1).
 pose proof (plus_norm_Sequential c0). pose proof (plus_norm_Sequential c1).

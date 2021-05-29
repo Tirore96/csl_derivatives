@@ -10,7 +10,6 @@ Require Import Setoid.
 Require Import Init.Tauto btauto.Btauto.
 Require Import Logic.ClassicalFacts.
 
-(** printing =~ %$=\sim$% *)
 
 Set Implicit Arguments.
 
@@ -36,7 +35,7 @@ Inductive Contract : Set :=
 Notation "c0 _;_ c1"  := (CSeq c0 c1)
                          (at level 50, left associativity).
 
-Notation "c0 _*_ c1"  := (Par c0 c1)
+Notation "c0 _||_ c1"  := (Par c0 c1)
                          (at level 52, left associativity).
 
 Notation "c0 _+_ c1"  := (CPlus c0 c1)
@@ -52,7 +51,7 @@ match c with
 | Event e => false
 | c0 _;_ c1 => nu c0 && nu c1
 | c0 _+_ c1 => nu c0 || nu c1
-| c0 _*_ c1 => nu c0 && nu c1
+| c0 _||_ c1 => nu c0 && nu c1
 end.
 (*
 Definition o (c : Contract) := if nu c then Success else Failure.
@@ -88,7 +87,7 @@ match c with
                  ((derive e c0) _;_ c1) _+_ (derive e c1)
                  else (derive e c0) _;_ c1
 | c0 _+_ c1 => e \ c0 _+_ e \ c1
-| c0 _*_ c1 => (derive e c0) _*_ c1 _+_ c0 _*_ (derive e c1)
+| c0 _||_ c1 => (derive e c0) _||_ c1 _+_ c0 _||_ (derive e c1)
 end
 where "e \ c" := (derive e c).
 
@@ -327,26 +326,26 @@ intros. generalize dependent l3. induction H;intros;simpl;auto with cDB.
 Qed.
 
 
-Reserved Notation "s =~ re" (at level 63).
+Reserved Notation "s (:) re" (at level 63).
 Inductive Matches_Comp : Trace -> Contract -> Prop :=
-  | MSuccess : [] =~ Success
-  | MEvent x : [x] =~ (Event x)
+  | MSuccess : [] (:) Success
+  | MEvent x : [x] (:) (Event x)
   | MSeq s1 c1 s2 c2
-             (H1 : s1 =~ c1)
-             (H2 : s2 =~ c2)
-           : (s1 ++ s2) =~ (c1 _;_ c2)
+             (H1 : s1 (:) c1)
+             (H2 : s2 (:) c2)
+           : (s1 ++ s2) (:) (c1 _;_ c2)
   | MPlusL s1 c1 c2
-                (H1 : s1 =~ c1)
-              : s1 =~ (c1 _+_ c2)
+                (H1 : s1 (:) c1)
+              : s1 (:) (c1 _+_ c2)
   | MPlusR c1 s2 c2
-                (H2 : s2 =~ c2)
-              : s2 =~ (c1 _+_ c2)
+                (H2 : s2 (:) c2)
+              : s2 (:) (c1 _+_ c2)
   | MPar s1 c1 s2 c2 s
-             (H1 : s1 =~ c1)
-             (H2 : s2 =~ c2)
+             (H1 : s1 (:) c1)
+             (H2 : s2 (:) c2)
              (H3 : interleave s1 s2 s)
-           : s =~ (c1 _*_ c2)
-  where "s =~ c" := (Matches_Comp s c).
+           : s (:) (c1 _||_ c2)
+  where "s (:) c" := (Matches_Comp s c).
 
 (*Derive Signature for Matches_Comp.*)
 
@@ -358,13 +357,13 @@ Ltac eq_event_destruct :=
          | [ _ : context[EventType_eq_dec ?e ?e0]  |- _ ] => destruct (EventType_eq_dec e e0);try contradiction
          end.
 
-Lemma seq_Success : forall c s, s =~ Success _;_ c <-> s =~ c.
+Lemma seq_Success : forall c s, s (:) Success _;_ c <-> s (:) c.
 Proof.
 split;intros. inversion H. inversion H3. subst. now simpl.
 rewrite <- (app_nil_l s). autoIC.
 Qed. 
 
-Lemma seq_Failure : forall c s, s =~ Failure _;_ c <-> s =~ Failure.
+Lemma seq_Failure : forall c s, s (:) Failure _;_ c <-> s (:) Failure.
 Proof.
 split;intros. inversion H. inversion H3. inversion H.
 Qed.
@@ -372,7 +371,7 @@ Qed.
 Hint Resolve seq_Success seq_Failure : cDB.
 
 (*
-Lemma o_or : forall (c0 c1 : Contract)(s : Trace), s =~ o c0 _;_ c1 -> nu c0 = true /\ s =~ c1 \/ nu c0 = false /\ s =~ Failure.
+Lemma o_or : forall (c0 c1 : Contract)(s : Trace), s (:) o c0 _;_ c1 -> nu c0 = true /\ s (:) c1 \/ nu c0 = false /\ s (:) Failure.
 Proof.
 intros. o_destruct. unfold o in H. destruct (nu c0). funelim (o c0).
 - rewrite <- Heqcall in H. rewrite seq_Success in H. now left.
@@ -432,7 +431,7 @@ Qed.
 Hint Rewrite matchesb_seq : cDB.
 
 Lemma nu_par_trace_derive_r : forall (s : Trace)(c0 c1 : Contract), 
-nu c0 = true -> nu (s \\ c1) = true -> nu (s \\ (c0 _*_ c1)) = true.
+nu c0 = true -> nu (s \\ c1) = true -> nu (s \\ (c0 _||_ c1)) = true.
 Proof.
 induction s;intros;simpl in *. intuition.
 rewrite derive_distr_plus. simpl. rewrite (IHs c0);auto with bool.
@@ -441,7 +440,7 @@ Qed.
 
 
 Lemma nu_par_trace_derive_l : forall (s : Trace)(c0 c1 : Contract), 
-nu c0 = true -> nu (s \\ c1) = true -> nu (s \\ (c1 _*_ c0)) = true.
+nu c0 = true -> nu (s \\ c1) = true -> nu (s \\ (c1 _||_ c0)) = true.
 Proof.
 induction s;intros;simpl in *. intuition.
 rewrite derive_distr_plus. simpl. rewrite (IHs c0);auto with bool.
@@ -450,7 +449,7 @@ Qed.
 Hint Resolve nu_par_trace_derive_l nu_par_trace_derive_r : cDB.
 
 Lemma matchesb_par : forall (s0 s1 s : Trace)(c0 c1 : Contract), interleave s0 s1 s ->
-nu (s0\\c0) = true -> nu (s1\\c1) = true -> nu (s\\(c0 _*_c1)) = true.
+nu (s0\\c0) = true -> nu (s1\\c1) = true -> nu (s\\(c0 _||_c1)) = true.
 Proof.
 intros. generalize dependent c1. generalize dependent c0.
 induction H;intros;simpl in*; auto with cDB. 
@@ -462,7 +461,7 @@ Qed.
 Hint Resolve matchesb_par : cDB.
 
 
-Lemma Matches_Comp_i_matchesb : forall (c : Contract)(s : Trace), s =~ c -> nu (s\\c) = true.
+Lemma Matches_Comp_i_matchesb : forall (c : Contract)(s : Trace), s (:) c -> nu (s\\c) = true.
 Proof.
 intros; induction H; 
 solve [ autorewrite with cDB; simpl; auto with bool 
@@ -471,7 +470,7 @@ Qed.
 
 
 
-Lemma Matches_Comp_nil_nu : forall (c : Contract), nu c = true -> [] =~ c.
+Lemma Matches_Comp_nil_nu : forall (c : Contract), nu c = true -> [] (:) c.
 Proof.
 intros;induction c; simpl in H ; try discriminate; autoIC.
 - apply orb_prop in H. destruct H; autoIC.
@@ -481,7 +480,7 @@ Qed.
 
 
 (*This direction with longer trace on the right because of induction step on trace*)
-Lemma Matches_Comp_derive : forall (c : Contract)(e : EventType)(s : Trace), s =~ e \ c-> (e::s) =~ c.
+Lemma Matches_Comp_derive : forall (c : Contract)(e : EventType)(s : Trace), s (:) e \ c-> (e::s) (:) c.
 Proof.
 induction c;intros; simpl in*; try solve [inversion H].
 - eq_event_destruct. inversion H. subst. autoIC. inversion H.
@@ -500,7 +499,7 @@ Qed.
 
 
 
-Theorem Matches_Comp_iff_matchesb : forall (c : Contract)(s : Trace), s =~ c <-> nu (s \\ c) = true.
+Theorem Matches_Comp_iff_matchesb : forall (c : Contract)(s : Trace), s (:) c <-> nu (s \\ c) = true.
 Proof.
 split;intros.
 - auto using Matches_Comp_i_matchesb.
@@ -509,7 +508,7 @@ split;intros.
   auto using Matches_Comp_derive.
 Qed.
 
-Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s =~ c <-> s =~ e \ c.
+Lemma derive_spec_comp : forall (c : Contract)(e : EventType)(s : Trace), e::s (:) c <-> s (:) e \ c.
 Proof.
 intros. repeat rewrite Matches_Comp_iff_matchesb. now simpl.
 Qed.
